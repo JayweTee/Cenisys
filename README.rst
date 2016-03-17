@@ -61,3 +61,4 @@ Special Thanks
 
 - Thanks to PocketMine team: Protocol is based on PocketMine-MP source
 - Thanks to Bukkit: API is inspired by Bukkit
+- Thanks to Glowstone team: Internal design is based on Glowstone one
