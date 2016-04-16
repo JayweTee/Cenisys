@@ -1,6 +1,7 @@
 # TODO: Change this when 1.61 released
 find_package(Boost 1.60
     COMPONENTS filesystem
+    iostreams
     locale
     program_options
     system
@@ -26,6 +27,7 @@ add_library(cenisyscore SHARED
     block/blockface.cpp
     util/vector.cpp
     util/location.cpp
+    util/nbt.cpp
     material/material.cpp
     material/air.cpp
     inventory/itemstack.cpp
@@ -34,6 +36,7 @@ target_link_libraries(cenisyscore PRIVATE
     Threads::Threads
     Boost::boost
     Boost::filesystem
+    Boost::iostreams
     Boost::locale
     Boost::system
     YamlCpp

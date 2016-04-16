@@ -1,17 +1,20 @@
 option(BUILD_TEST "Build and install tests" OFF)
 if(BUILD_TEST)
     find_package(Boost 1.60
-        COMPONENTS unit_test_framework
+        COMPONENTS iostreams
+        unit_test_framework
         REQUIRED
         )
-    include_directories("${PROJECT_SOURCE_DIR}/include")
+    include_directories("${PROJECT_SOURCE_DIR}/include" "${PROJECT_SOURCE_DIR}/src")
     set(CMAKE_INCLUDE_CURRENT_DIR ON)
     add_executable(cenisystest
         main.cpp
+        nbt.cpp
         )
     target_link_libraries(cenisystest
         cenisyscore
         Boost::boost
+        Boost::iostreams
         Boost::unit_test_framework
         )
     if(NOT Boost_USE_STATIC_LIBS)
