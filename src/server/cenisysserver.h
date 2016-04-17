@@ -96,6 +96,7 @@ private:
     std::mutex _registerCommandLock;
     CenisysConfigManager _configManager;
     std::unique_ptr<ThreadedTerminalConsole> _terminalConsole;
+    Server::RegisteredCommandHandler _helpCommand;
     std::unique_ptr<DefaultCommandHandlers> _defaultCommands;
     LoggerBackendList _loggerBackends;
     std::mutex _loggerBackendListLock;

@@ -134,17 +134,6 @@ bool CenisysServer::dispatchCommand(CommandSender &sender,
 {
     std::lock_guard<std::mutex> lock(_registerCommandLock);
     auto commandName = command.substr(0, command.find(' '));
-    if(commandName == "help")
-    {
-        sender.sendMessage(boost::locale::translate("List of commands:"));
-        // TODO: Paging and more
-        for(const auto &item : _commandList)
-        {
-            sender.sendMessage(boost::locale::format("{1}: {2}") % item.first %
-                               std::get<boost::locale::message>(item.second));
-        }
-        return true;
-    }
     const auto &it = _commandList.find(commandName);
     if(it != _commandList.end())
     {
@@ -212,6 +201,25 @@ void CenisysServer::start()
     runCriticalTask(
         [this]
         {
+            _helpCommand = registerCommand(
+                "help", boost::locale::translate("Display this help"),
+                [this](CommandSender &sender, const std::string &command)
+                {
+                    sender.sendMessage(
+                        boost::locale::translate("List of commands:"));
+                    // TODO: Paging and more
+                    for(const auto &item : _commandList)
+                    {
+                        sender.sendMessage(
+                            boost::locale::format("/{1}: {2}") % item.first %
+                            std::get<boost::locale::message>(item.second));
+                    }
+                });
+        },
+        counter);
+    runCriticalTask(
+        [this]
+        {
             _defaultCommands = std::make_unique<DefaultCommandHandlers>(*this);
         },
         counter);
@@ -229,6 +237,12 @@ void CenisysServer::stop()
         [this]
         {
             _defaultCommands.reset();
+        },
+        counter);
+    runCriticalTask(
+        [this]
+        {
+            unregisterCommand(_helpCommand);
         },
         counter);
     waitCriticalTask(counter);
