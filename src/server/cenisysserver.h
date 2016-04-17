@@ -51,12 +51,14 @@ public:
     int run();
     void terminate();
 
-    void processEvent(std::function<void()> &&func);
+    void processEvent(const std::function<void()> &&func);
 
     std::locale getLocale(std::string locale);
-    bool dispatchCommand(std::string command);
+    bool dispatchCommand(CommandSender &sender, const std::string &command);
 
-    RegisteredCommandHandler registerCommand(CommandHandler handler);
+    RegisteredCommandHandler registerCommand(const std::string &command,
+                                             const boost::locale::message &help,
+                                             CommandHandler handler);
     void unregisterCommand(RegisteredCommandHandler handle);
 
     void log(const boost::locale::format &content);

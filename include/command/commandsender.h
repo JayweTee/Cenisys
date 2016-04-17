@@ -1,5 +1,5 @@
 /*
- * DefaultCommandHandlers
+ * Interface of a sender of a command.
  * Copyright (C) 2016 iTX Technologies
  *
  * This file is part of Cenisys.
@@ -17,27 +17,34 @@
  * You should have received a copy of the GNU General Public License
  * along with Cenisys.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef CENISYS_DEFAULTCOMMANDHANDLERS_H
-#define CENISYS_DEFAULTCOMMANDHANDLERS_H
 
-#include <functional>
-#include <unordered_map>
-#include "server/server.h"
+#ifndef CENISYS_COMMANDSENDER_H
+#define CENISYS_COMMANDSENDER_H
+
+#include <boost/locale/format.hpp>
+#include <boost/locale/message.hpp>
 
 namespace cenisys
 {
 
-class DefaultCommandHandlers
+class Server;
+
+class CommandSender
 {
 public:
-    DefaultCommandHandlers(Server &server);
-    ~DefaultCommandHandlers();
+    virtual ~CommandSender() = default;
 
-private:
-    Server &_server;
-    std::vector<Server::RegisteredCommandHandler> _handles;
+    virtual Server &getServer() = 0;
+
+    virtual void sendMessage(const boost::locale::format &content) = 0;
+
+    //!
+    //! \brief Log translated text to the server log.
+    //! \param content The content in string.
+    //!
+    virtual void sendMessage(const boost::locale::message &content) = 0;
 };
 
 } // namespace cenisys
 
-#endif // CENISYS_DEFAULTCOMMANDHANDLERS_H
+#endif // COMMANDSENDER_H

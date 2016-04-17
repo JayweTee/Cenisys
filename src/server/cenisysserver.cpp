@@ -28,6 +28,7 @@
 #include "config/configsection.h"
 #include "command/defaultcommandhandlers.h"
 #include "server/cenisysserver.h"
+#include "command/commandsender.h"
 
 namespace cenisys
 {
@@ -90,37 +91,34 @@ void CenisysServer::terminate()
         [this]
         {
             std::shared_lock<std::shared_timed_mutex> sharedLock(_stateLock);
-            while(_state != State::Running)
+            if(_state != State::Running)
             {
                 if(_state == State::Stopped)
                     return;
-                sharedLock.unlock();
-                _ioService.poll_one();
-                sharedLock.lock();
+                return terminate();
             }
             sharedLock.unlock();
             std::unique_lock<std::shared_timed_mutex> exclusiveLock(_stateLock);
             if(_state == State::Running)
             {
                 _state = State::Stopped;
+                exclusiveLock.unlock();
                 stop();
             }
         });
 }
 
-void CenisysServer::processEvent(std::function<void()> &&func)
+void CenisysServer::processEvent(const std::function<void()> &&func)
 {
     _ioService.post(
-        [this, func]
+        [ this, func = std::move(func) ]
         {
             std::shared_lock<std::shared_timed_mutex> lock(_stateLock);
-            while(_state != State::Running)
+            if(_state != State::Running)
             {
                 if(_state == State::Stopped)
                     return;
-                lock.unlock();
-                _ioService.poll_one();
-                lock.lock();
+                return processEvent(std::move(func));
             }
             func();
         });
@@ -131,30 +129,48 @@ std::locale CenisysServer::getLocale(std::string locale)
     return _localeGen(locale);
 }
 
-bool CenisysServer::dispatchCommand(std::string command)
+bool CenisysServer::dispatchCommand(CommandSender &sender,
+                                    const std::string &command)
 {
     std::lock_guard<std::mutex> lock(_registerCommandLock);
-    for(Server::CommandHandler &handler : _commandList)
-        if(handler(command))
-            return true;
-    // TODO: command sender
-    log(boost::locale::format(boost::locale::translate("Unknown command {1}")) %
-        command);
+    auto commandName = command.substr(0, command.find(' '));
+    if(commandName == "help")
+    {
+        sender.sendMessage(boost::locale::translate("List of commands:"));
+        // TODO: Paging and more
+        for(const auto &item : _commandList)
+        {
+            sender.sendMessage(boost::locale::format("{1}: {2}") % item.first %
+                               std::get<boost::locale::message>(item.second));
+        }
+        return true;
+    }
+    const auto &it = _commandList.find(commandName);
+    if(it != _commandList.end())
+    {
+        std::get<Server::CommandHandler>(it->second)(sender, command);
+        return true;
+    }
+    sender.sendMessage(
+        boost::locale::format(boost::locale::translate("Unknown command {1}")) %
+        commandName);
     return false;
 }
 
 Server::RegisteredCommandHandler
-CenisysServer::registerCommand(Server::CommandHandler handler)
+CenisysServer::registerCommand(const std::string &command,
+                               const boost::locale::message &help,
+                               Server::CommandHandler handler)
 {
     std::lock_guard<std::mutex> lock(_registerCommandLock);
-    _commandList.push_front(handler);
-    return _commandList.before_begin();
+    // TODO: C++17 non-explicit tuples
+    return _commandList.insert({command, std::make_tuple(help, handler)}).first;
 }
 
 void CenisysServer::unregisterCommand(Server::RegisteredCommandHandler handle)
 {
     std::lock_guard<std::mutex> lock(_registerCommandLock);
-    _commandList.erase_after(handle);
+    _commandList.erase(handle);
 }
 
 void CenisysServer::log(const boost::locale::format &content)
@@ -168,7 +184,7 @@ void CenisysServer::log(const boost::locale::message &content)
 {
     std::lock_guard<std::mutex> lock(_loggerBackendListLock);
     for(Server::LoggerBackend backend : _loggerBackends)
-        std::get<Server::LogFormat>(backend)(content);
+        std::get<Server::LogMessage>(backend)(content);
 }
 
 Server::RegisteredLoggerBackend
@@ -222,7 +238,7 @@ template <typename Fn>
 void CenisysServer::runCriticalTask(Fn &&func, std::atomic_size_t &counter)
 {
     counter++;
-    _ioService.post([func, &counter]
+    _ioService.post([ func = std::forward<Fn>(func), &counter ]
                     {
                         func();
                         counter--;

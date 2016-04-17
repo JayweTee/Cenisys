@@ -26,17 +26,22 @@
 #include <mutex>
 #include <queue>
 #include <thread>
+#include "server/server.h"
+#include "command/commandsender.h"
 
 namespace cenisys
 {
 
-class Server;
-
-class ThreadedTerminalConsole
+class ThreadedTerminalConsole : public CommandSender
 {
 public:
     ThreadedTerminalConsole(Server &server);
     ~ThreadedTerminalConsole();
+
+    Server &getServer();
+
+    void sendMessage(const boost::locale::format &content);
+    void sendMessage(const boost::locale::message &content);
 
 private:
     void readWorker();

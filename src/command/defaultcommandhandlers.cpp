@@ -18,37 +18,35 @@
  * along with Cenisys.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "config.h"
+#include "command/commandsender.h"
 #include "defaultcommandhandlers.h"
 
 namespace cenisys
 {
 
-DefaultCommandHandlers::DefaultCommandHandlers(Server &server)
-    : _server(server), _commandMap({{"stop", [this](const std::string &)
-                                     {
-                                         _server.terminate();
-                                     }}})
+DefaultCommandHandlers::DefaultCommandHandlers(Server &server) : _server(server)
 {
-    _handle = _server.registerCommand(std::bind(
-        &DefaultCommandHandlers::handleCommand, this, std::placeholders::_1));
+    _server.registerCommand(
+        "stop", boost::locale::translate("Terminate the server"),
+        [this](CommandSender &sender, const std::string &command)
+        {
+            _server.terminate();
+        });
+    _server.registerCommand(
+        "version", boost::locale::translate("Show the server version"),
+        [this](CommandSender &sender, const std::string &command)
+        {
+            sender.sendMessage(
+                boost::locale::format(boost::locale::translate("Cenisys {1}")) %
+                SERVER_VERSION);
+        });
 }
 
 DefaultCommandHandlers::~DefaultCommandHandlers()
 {
-    _server.unregisterCommand(_handle);
-}
-
-bool DefaultCommandHandlers::handleCommand(const std::string &command)
-{
-    if(_commandMap.count(command))
-    {
-        _commandMap[command.substr(0, command.find(' '))](command);
-        return true;
-    }
-    else
-    {
-        return false;
-    }
+    for(const auto &item : _handles)
+        _server.unregisterCommand(item);
 }
 
 } // namespace cenisys

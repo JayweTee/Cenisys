@@ -23,6 +23,7 @@
 #include <functional>
 #include <forward_list>
 #include <locale>
+#include <map>
 #include <string>
 #include <tuple>
 #include <boost/locale/format.hpp>
@@ -32,6 +33,7 @@ namespace cenisys
 {
 
 class ConfigSection;
+class CommandSender;
 
 //!
 //! \brief The interface for the server.
@@ -39,8 +41,11 @@ class ConfigSection;
 class Server
 {
 public:
-    using CommandHandler = std::function<bool(const std::string &)>;
-    using CommandHandlerList = std::forward_list<CommandHandler>;
+    using CommandHandler =
+        std::function<void(CommandSender &, const std::string &)>;
+    using CommandHandlerList =
+        std::map<std::string,
+                 std::tuple<boost::locale::message, CommandHandler>>;
     using RegisteredCommandHandler = CommandHandlerList::const_iterator;
 
     using LogFormat = std::function<void(const boost::locale::format &)>;
@@ -63,7 +68,7 @@ public:
     //!
     virtual void terminate() = 0;
 
-    virtual void processEvent(std::function<void()> &&func) = 0;
+    virtual void processEvent(const std::function<void()> &&func) = 0;
 
     virtual std::locale getLocale(std::string locale) = 0;
 
@@ -72,7 +77,8 @@ public:
     //! \param command The command and arguments, without the leading slash.
     //! \return true on success, false if command does not exist.
     //!
-    virtual bool dispatchCommand(std::string command) = 0;
+    virtual bool dispatchCommand(CommandSender &sender,
+                                 const std::string &command) = 0;
 
     //!
     //! \brief Register a command.
@@ -80,7 +86,9 @@ public:
     //! \return A handle to unregister the command.
     //!
     virtual RegisteredCommandHandler
-    registerCommand(CommandHandler handler) = 0;
+    registerCommand(const std::string &command,
+                    const boost::locale::message &help,
+                    Server::CommandHandler handler) = 0;
 
     //!
     //! \brief Unregister the command.

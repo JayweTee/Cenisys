@@ -32,11 +32,12 @@ ThreadedTerminalConsole::ThreadedTerminalConsole(Server &server)
     _running = true;
     _readThread = std::thread(&ThreadedTerminalConsole::readWorker, this);
     _writeThread = std::thread(&ThreadedTerminalConsole::writeWorker, this);
-    _loggerBackendHandle = _server.registerBackend(std::make_tuple(
+    // TODO: in C++17 tuples are non-explicit
+    _loggerBackendHandle = _server.registerBackend(Server::LoggerBackend{
         std::bind(&ThreadedTerminalConsole::log<boost::locale::format>, this,
                   std::placeholders::_1),
         std::bind(&ThreadedTerminalConsole::log<boost::locale::message>, this,
-                  std::placeholders::_1)));
+                  std::placeholders::_1)});
 }
 
 ThreadedTerminalConsole::~ThreadedTerminalConsole()
@@ -54,6 +55,21 @@ ThreadedTerminalConsole::~ThreadedTerminalConsole()
     _writeThread.join();
 }
 
+Server &ThreadedTerminalConsole::getServer()
+{
+    return _server;
+}
+
+void ThreadedTerminalConsole::sendMessage(const boost::locale::format &content)
+{
+    log(content);
+}
+
+void ThreadedTerminalConsole::sendMessage(const boost::locale::message &content)
+{
+    log(content);
+}
+
 void ThreadedTerminalConsole::readWorker()
 {
     while(_running)
@@ -61,8 +77,8 @@ void ThreadedTerminalConsole::readWorker()
         std::string buf;
         std::getline(std::cin, buf);
         if(!buf.empty())
-            _server.processEvent(
-                std::bind(&Server::dispatchCommand, &_server, buf));
+            _server.processEvent(std::bind(&Server::dispatchCommand, &_server,
+                                           std::ref(*this), buf));
         if(!std::cin)
         {
             _server.terminate();
@@ -76,8 +92,10 @@ void ThreadedTerminalConsole::writeWorker()
     while(_running || !_writeQueue.empty())
     {
         std::unique_lock<std::mutex> lock(_writeQueueLock);
-        if(_running && _writeQueue.empty())
-            _writeQueueNotifier.wait(lock);
+        _writeQueueNotifier.wait(lock, [this]() -> bool
+                                 {
+                                     return !_running || !_writeQueue.empty();
+                                 });
         std::string buf;
         // Ensure everything is written
         while(!_writeQueue.empty())
