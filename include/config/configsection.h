@@ -1,5 +1,5 @@
 /*
- * A section of a config.
+ * ConfigSection
  * Copyright (C) 2016 iTX Technologies
  *
  * This file is part of Cenisys.
@@ -20,15 +20,15 @@
 #ifndef CENISYS_CONFIGSECTION_H
 #define CENISYS_CONFIGSECTION_H
 
-#include <string>
-#include <vector>
+#include <mutex>
+#include <boost/filesystem/path.hpp>
+#include <yaml-cpp/node/node.h>
 
 namespace cenisys
 {
 
-//!
-//! \brief Represents a section of a config, or a subsection of a section.
-//!
+class Server;
+
 class ConfigSection
 {
 public:
@@ -53,43 +53,58 @@ public:
         std::vector<std::string> _items;
     };
 
-    virtual ~ConfigSection() = default;
+    ConfigSection(Server &server, const boost::filesystem::path &filePath);
+    ~ConfigSection();
 
-    virtual bool getBool(const Path &path, bool defaultValue) = 0;
-    virtual int getInt(const Path &path, int defaultValue) = 0;
-    virtual unsigned int getUInt(const Path &path,
-                                 unsigned int defaultValue) = 0;
-    virtual double getDouble(const Path &path, double defaultValue) = 0;
-    virtual std::string getString(const Path &path,
-                                  const std::string &defaultValue) = 0;
-    virtual std::vector<bool>
-    getBoolList(const Path &path,
-                const std::vector<bool> &defaultValue = {}) = 0;
-    virtual std::vector<int>
-    getIntList(const Path &path, const std::vector<int> &defaultValue = {}) = 0;
-    virtual std::vector<unsigned int>
+    bool getBool(const Path &path, bool defaultValue);
+    int getInt(const Path &path, int defaultValue);
+    unsigned int getUInt(const Path &path, unsigned int defaultValue);
+    double getDouble(const Path &path, double defaultValue);
+    std::string getString(const Path &path, const std::string &defaultValue);
+    std::vector<bool> getBoolList(const Path &path,
+                                  const std::vector<bool> &defaultValue = {});
+    std::vector<int> getIntList(const Path &path,
+                                const std::vector<int> &defaultValue = {});
+    std::vector<unsigned int>
     getUIntList(const Path &path,
-                const std::vector<unsigned int> &defaultValue = {}) = 0;
-    virtual std::vector<double>
+                const std::vector<unsigned int> &defaultValue = {});
+    std::vector<double>
     getDoubleList(const Path &path,
-                  const std::vector<double> &defaultValue = {}) = 0;
-    virtual std::vector<std::string>
+                  const std::vector<double> &defaultValue = {});
+    std::vector<std::string>
     getStringList(const Path &path,
-                  const std::vector<std::string> &defaultValue = {}) = 0;
-    virtual void setBool(const Path &path, bool value) = 0;
-    virtual void setInt(const Path &path, int value) = 0;
-    virtual void setUInt(const Path &path, unsigned int value) = 0;
-    virtual void setDouble(const Path &path, double value) = 0;
-    virtual void setString(const Path &path, const std::string &value) = 0;
-    virtual void setBoolList(const Path &path,
-                             const std::vector<bool> &value) = 0;
-    virtual void setIntList(const Path &path,
-                            const std::vector<int> &value) = 0;
-    virtual void setDoubleList(const Path &path,
-                               const std::vector<double> &value) = 0;
-    virtual void setStringList(const Path &path,
-                               const std::vector<std::string> &value) = 0;
-    virtual std::vector<Path> getKeys(const Path &path) = 0;
+                  const std::vector<std::string> &defaultValue = {});
+    void setBool(const Path &path, bool value);
+    void setInt(const Path &path, int value);
+    void setUInt(const Path &path, unsigned int value);
+    void setDouble(const Path &path, double value);
+    void setString(const Path &path, const std::string &value);
+    void setBoolList(const Path &path, const std::vector<bool> &value);
+    void setIntList(const Path &path, const std::vector<int> &value);
+    void setDoubleList(const Path &path, const std::vector<double> &value);
+    void setStringList(const Path &path, const std::vector<std::string> &value);
+    std::vector<Path> getKeys(const Path &path);
+
+private:
+    template <typename T>
+    T getValue(const Path &path, const T &defaultValue);
+    template <typename T>
+    std::vector<T> getList(const Path &path,
+                           const std::vector<T> &defaultValue);
+
+    template <typename T>
+    void setValue(const Path &path, const T &value);
+    template <typename T>
+    void setList(const Path &path, const std::vector<T> &value);
+
+    YAML::Node correctParent(const Path &path);
+
+    Server &_server;
+    boost::filesystem::path _filePath;
+    YAML::Node _root;
+    std::mutex _lock;
+
+    // TODO: implement modification monitoring
 };
 
 } // namespace cenisys

@@ -13,10 +13,10 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 configure_file(config.h.in config.h)
 add_library(cenisys SHARED
     command/defaultcommandhandlers.cpp
-    config/cenisysconfigsection.cpp
-    server/cenisysserver.cpp
+    config/configsection.cpp
+    server/server.cpp
     server/threadedterminalconsole.cpp
-    server/cenisysconfigmanager.cpp
+    server/configmanager.cpp
     )
 target_link_libraries(cenisys PRIVATE
     Threads::Threads

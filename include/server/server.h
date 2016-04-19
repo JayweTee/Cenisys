@@ -1,5 +1,5 @@
 /*
- * Interface of the server.
+ * Implementation of the main server.
  * Copyright (C) 2016 iTX Technologies
  *
  * This file is part of Cenisys.
@@ -20,24 +20,31 @@
 #ifndef CENISYS_SERVER_H
 #define CENISYS_SERVER_H
 
-#include <functional>
+#include <atomic>
 #include <forward_list>
 #include <locale>
 #include <map>
-#include <string>
-#include <tuple>
+#include <memory>
+#include <mutex>
+#include <shared_mutex>
+#include <thread>
+#include <vector>
+#include <boost/asio/io_service.hpp>
+#include <boost/asio/signal_set.hpp>
+#include <boost/filesystem/path.hpp>
 #include <boost/locale/format.hpp>
+#include <boost/locale/generator.hpp>
 #include <boost/locale/message.hpp>
+#include "server/configmanager.h"
 
 namespace cenisys
 {
 
 class ConfigSection;
+class DefaultCommandHandlers;
 class CommandSender;
+class ThreadedTerminalConsole;
 
-//!
-//! \brief The interface for the server.
-//!
 class Server
 {
 public:
@@ -54,75 +61,71 @@ public:
     using LoggerBackendList = std::forward_list<LoggerBackend>;
     using RegisteredLoggerBackend = LoggerBackendList::const_iterator;
 
-    virtual ~Server() = default;
+    Server(const boost::filesystem::path &dataDir,
+           boost::locale::generator &localeGen);
+    ~Server();
 
-    //!
-    //! \brief Start running the server.
-    //! \return Zero if stopped by user, non-zero if any error crashed the
-    //! server.
-    //!
-    virtual int run() = 0;
+    int run();
+    void terminate();
 
-    //!
-    //! \brief Stop the server. May called from any thread.
-    //!
-    virtual void terminate() = 0;
+    void processEvent(const std::function<void()> &&func);
 
-    virtual void processEvent(const std::function<void()> &&func) = 0;
+    std::locale getLocale(std::string locale);
+    bool dispatchCommand(CommandSender &sender, const std::string &command);
 
-    virtual std::locale getLocale(std::string locale) = 0;
+    RegisteredCommandHandler registerCommand(const std::string &command,
+                                             const boost::locale::message &help,
+                                             CommandHandler handler);
+    void unregisterCommand(RegisteredCommandHandler handle);
 
-    //!
-    //! \brief Process a command.
-    //! \param command The command and arguments, without the leading slash.
-    //! \return true on success, false if command does not exist.
-    //!
-    virtual bool dispatchCommand(CommandSender &sender,
-                                 const std::string &command) = 0;
+    template <typename T>
+    void log(const T &content)
+    {
+        boost::locale::format formatted("{1}");
+        formatted % content;
+        std::lock_guard<std::mutex> lock(_loggerBackendListLock);
+        for(Server::LoggerBackend backend : _loggerBackends)
+            std::get<Server::LogFormat>(backend)(formatted);
+    }
 
-    //!
-    //! \brief Register a command.
-    //! \param handler The function which processes the command.
-    //! \return A handle to unregister the command.
-    //!
-    virtual RegisteredCommandHandler
-    registerCommand(const std::string &command,
-                    const boost::locale::message &help,
-                    Server::CommandHandler handler) = 0;
+    RegisteredLoggerBackend registerBackend(LoggerBackend backend);
+    void unregisterBackend(RegisteredLoggerBackend handle);
 
-    //!
-    //! \brief Unregister the command.
-    //! \param handle The return value of registerCommand.
-    //!
-    virtual void unregisterCommand(RegisteredCommandHandler handle) = 0;
+    std::shared_ptr<ConfigSection> getConfig(const std::string &name);
 
-    //!
-    //! \brief Log formatted text to the server log.
-    //! \param content The content in string. May contain color codes.
-    //!
-    virtual void log(const boost::locale::format &content) = 0;
+private:
+    enum class State
+    {
+        NotStarted, // Postpone all events
+        Running,    // Accept events
+        Stopped,    // Discard any events
+    };
 
-    //!
-    //! \brief Log translated text to the server log.
-    //! \param content The content in string.
-    //!
-    virtual void log(const boost::locale::message &content) = 0;
+    void start();
+    void stop();
 
-    //!
-    //! \brief Register a logger backend.
-    //! \param backend The function to call to log. Must not block.
-    //! \return A handle to the registered backend.
-    //!
-    virtual RegisteredLoggerBackend registerBackend(LoggerBackend backend) = 0;
+    template <typename Fn>
+    void runCriticalTask(Fn &&func, std::atomic_size_t &counter);
+    void waitCriticalTask(std::atomic_size_t &counter);
 
-    //!
-    //! \brief Unregister the logger backend.
-    //! \param handle The handle returned by registerBackend.
-    //!
-    virtual void unregisterBackend(RegisteredLoggerBackend handle) = 0;
-
-    virtual std::shared_ptr<ConfigSection>
-    getConfig(const std::string &name) = 0;
+    std::atomic<State> _state;
+    // TODO: shared_mutex is C++17
+    std::shared_timed_mutex _stateLock;
+    std::locale _oldCoutLoc;
+    boost::filesystem::path _dataDir;
+    boost::locale::generator &_localeGen;
+    boost::asio::io_service _ioService;
+    std::vector<std::thread> _threads;
+    boost::asio::signal_set _termSignals;
+    CommandHandlerList _commandList;
+    std::mutex _registerCommandLock;
+    ConfigManager _configManager;
+    std::unique_ptr<ThreadedTerminalConsole> _terminalConsole;
+    RegisteredCommandHandler _helpCommand;
+    std::unique_ptr<DefaultCommandHandlers> _defaultCommands;
+    LoggerBackendList _loggerBackends;
+    std::mutex _loggerBackendListLock;
+    std::shared_ptr<ConfigSection> _config;
 };
 
 } // namespace cenisys

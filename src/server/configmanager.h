@@ -1,5 +1,5 @@
 /*
- * CenisysConfigManager
+ * ConfigManager
  * Copyright (C) 2016 iTX Technologies
  *
  * This file is part of Cenisys.
@@ -17,8 +17,8 @@
  * You should have received a copy of the GNU General Public License
  * along with Cenisys.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef CENISYS_CENISYSCONFIGMANAGER_H
-#define CENISYS_CENISYSCONFIGMANAGER_H
+#ifndef CENISYS_CONFIGMANAGER_H
+#define CENISYS_CONFIGMANAGER_H
 
 #include <memory>
 #include <string>
@@ -31,12 +31,11 @@ namespace cenisys
 class Server;
 class ConfigSection;
 
-class CenisysConfigManager
+class ConfigManager
 {
 public:
-    CenisysConfigManager(Server &server,
-                         const boost::filesystem::path &basepath);
-    ~CenisysConfigManager();
+    ConfigManager(Server &server, const boost::filesystem::path &basepath);
+    ~ConfigManager();
     std::shared_ptr<ConfigSection> getConfig(const std::string &name);
 
 private:
@@ -47,4 +46,4 @@ private:
 
 } // namespace cenisys
 
-#endif // CENISYS_CENISYSCONFIGMANAGER_H
+#endif // CENISYS_CONFIGMANAGER_H

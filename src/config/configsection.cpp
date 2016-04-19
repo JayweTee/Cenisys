@@ -1,5 +1,5 @@
 /*
- * CenisysConfigSection
+ * ConfigSection
  * Copyright (C) 2016 iTX Technologies
  *
  * This file is part of Cenisys.
@@ -28,13 +28,13 @@
 #include <boost/system/error_code.hpp>
 #include <yaml-cpp/yaml.h>
 #include "server/server.h"
-#include "cenisysconfigsection.h"
+#include "config/configsection.h"
 
 namespace cenisys
 {
 
-CenisysConfigSection::CenisysConfigSection(
-    Server &server, const boost::filesystem::path &filePath)
+ConfigSection::ConfigSection(Server &server,
+                             const boost::filesystem::path &filePath)
     : _server(server), _filePath(filePath)
 
 {
@@ -55,7 +55,7 @@ CenisysConfigSection::CenisysConfigSection(
     _root[""];
 }
 
-CenisysConfigSection::~CenisysConfigSection()
+ConfigSection::~ConfigSection()
 {
     if(!boost::filesystem::exists(_filePath.parent_path()))
     {
@@ -70,125 +70,120 @@ CenisysConfigSection::~CenisysConfigSection()
     out << _root;
 }
 
-bool CenisysConfigSection::getBool(const ConfigSection::Path &path,
-                                   bool defaultValue)
+bool ConfigSection::getBool(const ConfigSection::Path &path, bool defaultValue)
 {
     return getValue(path, defaultValue);
 }
 
-int CenisysConfigSection::getInt(const ConfigSection::Path &path,
-                                 int defaultValue)
+int ConfigSection::getInt(const ConfigSection::Path &path, int defaultValue)
 {
     return getValue(path, defaultValue);
 }
 
-unsigned int CenisysConfigSection::getUInt(const ConfigSection::Path &path,
-                                           unsigned int defaultValue)
+unsigned int ConfigSection::getUInt(const ConfigSection::Path &path,
+                                    unsigned int defaultValue)
 {
     return getValue(path, defaultValue);
 }
 
-double CenisysConfigSection::getDouble(const ConfigSection::Path &path,
-                                       double defaultValue)
+double ConfigSection::getDouble(const ConfigSection::Path &path,
+                                double defaultValue)
 {
     return getValue(path, defaultValue);
 }
 
-std::string CenisysConfigSection::getString(const ConfigSection::Path &path,
-                                            const std::string &defaultValue)
+std::string ConfigSection::getString(const ConfigSection::Path &path,
+                                     const std::string &defaultValue)
 {
     return getValue(path, defaultValue);
 }
 
 std::vector<bool>
-CenisysConfigSection::getBoolList(const ConfigSection::Path &path,
-                                  const std::vector<bool> &defaultValue)
+ConfigSection::getBoolList(const ConfigSection::Path &path,
+                           const std::vector<bool> &defaultValue)
 {
     return getList(path, defaultValue);
 }
 
-std::vector<int>
-CenisysConfigSection::getIntList(const ConfigSection::Path &path,
-                                 const std::vector<int> &defaultValue)
+std::vector<int> ConfigSection::getIntList(const ConfigSection::Path &path,
+                                           const std::vector<int> &defaultValue)
 {
     return getList(path, defaultValue);
 }
 
 std::vector<unsigned int>
-CenisysConfigSection::getUIntList(const ConfigSection::Path &path,
-                                  const std::vector<unsigned int> &defaultValue)
+ConfigSection::getUIntList(const ConfigSection::Path &path,
+                           const std::vector<unsigned int> &defaultValue)
 {
     return getList(path, defaultValue);
 }
 
 std::vector<double>
-CenisysConfigSection::getDoubleList(const ConfigSection::Path &path,
-                                    const std::vector<double> &defaultValue)
+ConfigSection::getDoubleList(const ConfigSection::Path &path,
+                             const std::vector<double> &defaultValue)
 {
     return getList(path, defaultValue);
 }
 
-std::vector<std::string> CenisysConfigSection::getStringList(
-    const ConfigSection::Path &path,
-    const std::vector<std::string> &defaultValue)
+std::vector<std::string>
+ConfigSection::getStringList(const ConfigSection::Path &path,
+                             const std::vector<std::string> &defaultValue)
 {
     return getList(path, defaultValue);
 }
 
-void CenisysConfigSection::setBool(const ConfigSection::Path &path, bool value)
+void ConfigSection::setBool(const ConfigSection::Path &path, bool value)
 {
     setValue(path, value);
 }
 
-void CenisysConfigSection::setInt(const ConfigSection::Path &path, int value)
+void ConfigSection::setInt(const ConfigSection::Path &path, int value)
 {
     setValue(path, value);
 }
 
-void CenisysConfigSection::setUInt(const ConfigSection::Path &path,
-                                   unsigned int value)
+void ConfigSection::setUInt(const ConfigSection::Path &path, unsigned int value)
 {
     setValue(path, value);
 }
 
-void CenisysConfigSection::setDouble(const ConfigSection::Path &path,
-                                     double value)
+void ConfigSection::setDouble(const ConfigSection::Path &path, double value)
 {
     setValue(path, value);
 }
 
-void CenisysConfigSection::setString(const ConfigSection::Path &path,
-                                     const std::string &value)
+void ConfigSection::setString(const ConfigSection::Path &path,
+                              const std::string &value)
 {
     setValue(path, value);
 }
 
-void CenisysConfigSection::setBoolList(const ConfigSection::Path &path,
-                                       const std::vector<bool> &value)
+void ConfigSection::setBoolList(const ConfigSection::Path &path,
+                                const std::vector<bool> &value)
 {
     setList(path, value);
 }
 
-void CenisysConfigSection::setIntList(const ConfigSection::Path &path,
-                                      const std::vector<int> &value)
+void ConfigSection::setIntList(const ConfigSection::Path &path,
+                               const std::vector<int> &value)
 {
     setList(path, value);
 }
 
-void CenisysConfigSection::setDoubleList(const ConfigSection::Path &path,
-                                         const std::vector<double> &value)
+void ConfigSection::setDoubleList(const ConfigSection::Path &path,
+                                  const std::vector<double> &value)
 {
     setList(path, value);
 }
 
-void CenisysConfigSection::setStringList(const ConfigSection::Path &path,
-                                         const std::vector<std::string> &value)
+void ConfigSection::setStringList(const ConfigSection::Path &path,
+                                  const std::vector<std::string> &value)
 {
     setList(path, value);
 }
 
 std::vector<ConfigSection::Path>
-CenisysConfigSection::getKeys(const ConfigSection::Path &path)
+ConfigSection::getKeys(const ConfigSection::Path &path)
 {
     std::lock_guard<std::mutex> lock(_lock);
     YAML::Node current = correctParent(path);
@@ -219,7 +214,7 @@ CenisysConfigSection::getKeys(const ConfigSection::Path &path)
 
 // Note: Truncate the keys before passing. This modifies everything include the
 // end of the path.
-YAML::Node CenisysConfigSection::correctParent(const ConfigSection::Path &path)
+YAML::Node ConfigSection::correctParent(const ConfigSection::Path &path)
 {
     if(_root && !_root.IsNull())
     {
@@ -253,8 +248,8 @@ YAML::Node CenisysConfigSection::correctParent(const ConfigSection::Path &path)
 }
 
 template <typename T>
-T CenisysConfigSection::getValue(const ConfigSection::Path &path,
-                                 const T &defaultValue)
+T ConfigSection::getValue(const ConfigSection::Path &path,
+                          const T &defaultValue)
 {
     std::lock_guard<std::mutex> lock(_lock);
     YAML::Node parent = correctParent(path.up());
@@ -279,8 +274,8 @@ T CenisysConfigSection::getValue(const ConfigSection::Path &path,
 }
 
 template <typename T>
-std::vector<T> CenisysConfigSection::getList(const ConfigSection::Path &path,
-                                             const std::vector<T> &defaultValue)
+std::vector<T> ConfigSection::getList(const ConfigSection::Path &path,
+                                      const std::vector<T> &defaultValue)
 {
     std::lock_guard<std::mutex> lock(_lock);
     YAML::Node parent = correctParent(path.up());
@@ -317,8 +312,7 @@ std::vector<T> CenisysConfigSection::getList(const ConfigSection::Path &path,
 }
 
 template <typename T>
-void CenisysConfigSection::setValue(const ConfigSection::Path &path,
-                                    const T &value)
+void ConfigSection::setValue(const ConfigSection::Path &path, const T &value)
 {
     std::lock_guard<std::mutex> lock(_lock);
     YAML::Node parent = correctParent(path.up());
@@ -335,8 +329,8 @@ void CenisysConfigSection::setValue(const ConfigSection::Path &path,
 }
 
 template <typename T>
-void CenisysConfigSection::setList(const ConfigSection::Path &path,
-                                   const std::vector<T> &value)
+void ConfigSection::setList(const ConfigSection::Path &path,
+                            const std::vector<T> &value)
 {
     std::lock_guard<std::mutex> lock(_lock);
     YAML::Node parent = correctParent(path.up());
