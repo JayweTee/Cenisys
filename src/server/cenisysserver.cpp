@@ -73,7 +73,7 @@ int CenisysServer::run()
             &_ioService);
     }
     _ioService.run();
-    log(boost::locale::translate("Waiting threads to finish..."));
+    log(boost::locale::translate("Waiting threads to finish…"));
     for(std::thread &t : _threads)
     {
         t.join();

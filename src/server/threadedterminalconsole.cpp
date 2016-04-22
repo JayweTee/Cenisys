@@ -46,8 +46,7 @@ ThreadedTerminalConsole::~ThreadedTerminalConsole()
     _running = false;
     lock.unlock();
     if(std::cin)
-        std::cerr << boost::locale::translate(
-                         "Please press Enter to continue...")
+        std::cerr << boost::locale::translate("Please press Enter to continue…")
                          .str()
                   << std::endl;
     _readThread.join();

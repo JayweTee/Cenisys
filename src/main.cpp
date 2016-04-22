@@ -38,8 +38,7 @@ int main(int argc, char *argv[])
     localeGen.set_default_messages_domain(GETTEXT_PACKAGE);
     std::locale oldLoc = std::locale::global(localeGen(""));
     std::vector<boost::filesystem::path> dataDir;
-    boost::program_options::options_description desc(
-        boost::locale::translate("This is the Cenisys launcher.").str());
+    boost::program_options::options_description desc;
     desc.add_options()(
         "help,h",
         boost::locale::translate("display this help and exit").str().c_str())(
