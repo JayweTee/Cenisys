@@ -292,10 +292,13 @@ void Server::start(boost::asio::coroutine coroutine)
                 _defaultCommands =
                     std::make_unique<DefaultCommandHandlers>(*this);
             });
-        _termSignals.async_wait([this]
-                                {
-                                    terminate();
-                                });
+        _termSignals.async_wait(
+            [this](const boost::system::error_code &ec, int signal)
+            {
+                if(ec == boost::asio::error::operation_aborted)
+                    return;
+                terminate();
+            });
         unlockCritical();
     }
 }
