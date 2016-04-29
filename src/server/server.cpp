@@ -205,22 +205,25 @@ void Server::asyncRunCritical(Handler &&handler, Fn &&... func)
         _counter -= sizeof...(func);
     }
     // TODO: C++17 fold expressions
-    int dummy[] = {
-        0,
-        (_ioService.post([ this, func = std::forward<Fn>(func), handler ]
-                         {
-                             func();
-                             // TODO: exceptions
-                             {
-                                 std::unique_lock<std::mutex> lock(_stateLock);
-                                 if(++_counter == -1)
-                                 {
-                                     lock.unlock();
-                                     handler();
-                                 }
-                             }
-                         }),
-         0)...};
+    // HACK: GCC bug
+    auto lambda = [this, handler](auto &&func)
+    {
+        _ioService.post(
+            [ this, func = std::forward<decltype(func)>(func), handler ]
+            {
+                func();
+                // TODO: exceptions
+                {
+                    std::unique_lock<std::mutex> lock(_stateLock);
+                    if(++_counter == -1)
+                    {
+                        lock.unlock();
+                        handler();
+                    }
+                }
+            });
+    };
+    int dummy[] = {0, (lambda(std::forward<Fn>(func)), 0)...};
 }
 
 void Server::start(boost::asio::coroutine coroutine)
