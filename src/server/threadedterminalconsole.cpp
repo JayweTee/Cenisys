@@ -32,10 +32,11 @@ ThreadedTerminalConsole::ThreadedTerminalConsole(
     _running = true;
     _readThread = std::thread(&ThreadedTerminalConsole::readWorker, this);
     _writeThread = std::thread(&ThreadedTerminalConsole::writeWorker, this);
-    _loggerBackendHandle = _server.registerBackend([this](const auto &param)
-                                                   {
-                                                       log(param);
-                                                   });
+    _loggerBackendHandle =
+        _server.registerBackend([this](const boost::locale::format &param)
+                                {
+                                    log(param);
+                                });
 }
 
 ThreadedTerminalConsole::~ThreadedTerminalConsole()
