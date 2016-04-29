@@ -26,6 +26,8 @@
 #include <mutex>
 #include <queue>
 #include <thread>
+#include <boost/asio/io_service.hpp>
+#include <boost/asio/strand.hpp>
 #include "server/server.h"
 #include "command/commandsender.h"
 
@@ -35,25 +37,24 @@ namespace cenisys
 class ThreadedTerminalConsole : public CommandSender
 {
 public:
-    ThreadedTerminalConsole(Server &server);
+    ThreadedTerminalConsole(Server &server, boost::asio::io_service &ioService);
     ~ThreadedTerminalConsole();
 
     Server &getServer();
 
     void sendMessage(const boost::locale::format &content);
-    void sendMessage(const boost::locale::message &content);
 
 private:
     void readWorker();
 
     void writeWorker();
-    template <typename T>
-    void log(const T &content);
+    void log(const boost::locale::format &content);
 
     Server &_server;
     std::atomic_bool _running;
 
     std::thread _readThread;
+    boost::asio::strand _commandStrand;
 
     std::thread _writeThread;
     std::locale _locale;

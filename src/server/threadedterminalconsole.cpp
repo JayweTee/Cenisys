@@ -19,25 +19,23 @@
  */
 #include <iostream>
 #include <boost/locale/format.hpp>
-#include <boost/locale/message.hpp>
 #include "server/server.h"
 #include "threadedterminalconsole.h"
 
 namespace cenisys
 {
 
-ThreadedTerminalConsole::ThreadedTerminalConsole(Server &server)
-    : _server(server)
+ThreadedTerminalConsole::ThreadedTerminalConsole(
+    Server &server, boost::asio::io_service &ioService)
+    : _server(server), _commandStrand(ioService)
 {
     _running = true;
     _readThread = std::thread(&ThreadedTerminalConsole::readWorker, this);
     _writeThread = std::thread(&ThreadedTerminalConsole::writeWorker, this);
-    // TODO: in C++17 tuples are non-explicit
-    _loggerBackendHandle = _server.registerBackend(Server::LoggerBackend{
-        std::bind(&ThreadedTerminalConsole::log<boost::locale::format>, this,
-                  std::placeholders::_1),
-        std::bind(&ThreadedTerminalConsole::log<boost::locale::message>, this,
-                  std::placeholders::_1)});
+    _loggerBackendHandle = _server.registerBackend([this](const auto &param)
+                                                   {
+                                                       log(param);
+                                                   });
 }
 
 ThreadedTerminalConsole::~ThreadedTerminalConsole()
@@ -46,13 +44,15 @@ ThreadedTerminalConsole::~ThreadedTerminalConsole()
     std::unique_lock<std::mutex> lock(_writeQueueLock);
     _running = false;
     lock.unlock();
+    _writeQueueNotifier.notify_all();
+    _writeThread.join();
     if(std::cin)
+    {
         std::cerr << boost::locale::translate("Please press Enter to continue…")
                          .str()
                   << std::endl;
+    }
     _readThread.join();
-    _writeQueueNotifier.notify_all();
-    _writeThread.join();
 }
 
 Server &ThreadedTerminalConsole::getServer()
@@ -65,11 +65,6 @@ void ThreadedTerminalConsole::sendMessage(const boost::locale::format &content)
     log(content);
 }
 
-void ThreadedTerminalConsole::sendMessage(const boost::locale::message &content)
-{
-    log(content);
-}
-
 void ThreadedTerminalConsole::readWorker()
 {
     while(_running)
@@ -77,11 +72,14 @@ void ThreadedTerminalConsole::readWorker()
         std::string buf;
         std::getline(std::cin, buf);
         if(!buf.empty())
-            _server.processEvent(std::bind(&Server::dispatchCommand, &_server,
-                                           std::ref(*this), buf));
+            _server.processEvent(_commandStrand, [ this, buf = std::move(buf) ]
+                                 {
+                                     _server.dispatchCommand(*this,
+                                                             std::move(buf));
+                                 });
         if(!std::cin)
         {
-            _server.terminate();
+            _server.terminate(_commandStrand);
             break;
         }
     }
@@ -89,9 +87,9 @@ void ThreadedTerminalConsole::readWorker()
 
 void ThreadedTerminalConsole::writeWorker()
 {
+    std::unique_lock<std::mutex> lock(_writeQueueLock);
     while(_running || !_writeQueue.empty())
     {
-        std::unique_lock<std::mutex> lock(_writeQueueLock);
         _writeQueueNotifier.wait(lock, [this]() -> bool
                                  {
                                      return !_running || !_writeQueue.empty();
@@ -100,17 +98,16 @@ void ThreadedTerminalConsole::writeWorker()
         // Ensure everything is written
         while(!_writeQueue.empty())
         {
-            buf += _writeQueue.front();
-            buf += '\n';
+            buf += std::move(_writeQueue.front()) + '\n';
             _writeQueue.pop();
         }
         lock.unlock();
         std::cout << buf << std::flush;
+        lock.lock();
     }
 }
 
-template <typename T>
-void ThreadedTerminalConsole::log(const T &content)
+void ThreadedTerminalConsole::log(const boost::locale::format &content)
 {
     std::unique_lock<std::mutex> lock(_writeQueueLock);
     _writeQueue.push(content.str());

@@ -36,7 +36,7 @@ namespace cenisys
 
 Server::Server(const boost::filesystem::path &dataDir,
                boost::locale::generator &localeGen)
-    : _dataDir(dataDir), _localeGen(localeGen),
+    : _counter(0), _dataDir(dataDir), _localeGen(localeGen),
       _termSignals(_ioService, SIGINT, SIGTERM),
       _configManager(*this, _dataDir / "config")
 {
@@ -48,102 +48,17 @@ Server::~Server()
 
 int Server::run()
 {
-    _state = State::NotStarted;
-    _ioService.post(std::bind(&Server::start, this));
-    _config = _configManager.getConfig("cenisys");
-    if(_config->getBool(ConfigSection::Path() / "console", true))
-    {
-        _terminalConsole = std::make_unique<ThreadedTerminalConsole>(*this);
-    }
-    log(boost::locale::format(
-            boost::locale::translate("Starting Cenisys {1}.")) %
-        SERVER_VERSION);
-    unsigned int threads =
-        _config->getUInt(ConfigSection::Path() / "threads", 0);
-    if(threads == 0)
-        threads = std::thread::hardware_concurrency();
-    if(threads == 0)
-        threads = 1;
-    log(boost::locale::format(boost::locale::translate(
-            "Spinning up {1} thread.", "Spinning up {1} threads.", threads)) %
-        threads);
-    for(unsigned int i = 1; i < threads; i++)
-    {
-        _threads.emplace_back(
-            static_cast<std::size_t (boost::asio::io_service::*)()>(
-                &boost::asio::io_service::run),
-            &_ioService);
-    }
+    _ioService.post([this]
+                    {
+                        start();
+                    });
     _ioService.run();
-    log(boost::locale::translate("Waiting threads to finish…"));
+    // Currently there's no way to terminate threads in io_service.
     for(auto &item : _threads)
     {
         item.join();
     }
-    log(boost::locale::translate("Server successfully terminated."));
-    _terminalConsole.reset();
-    _config.reset();
     return 0;
-}
-
-void Server::terminate()
-{
-    _ioService.post(
-        [this]
-        {
-            State swap = State::Running;
-            if(!_state.compare_exchange_strong(swap, State::Stopped))
-            {
-                if(swap == State::Stopped)
-                {
-                    return;
-                }
-                else
-                {
-                    return terminate();
-                }
-            }
-            std::unique_lock<std::shared_timed_mutex> waitTask(_stateLock);
-            stop();
-        });
-}
-
-// HACK: Asio doesn't allow move handlers
-namespace
-{
-template <typename F>
-struct move_wrapper : F
-{
-    move_wrapper(F &&f) : F(std::move(f)) {}
-
-    move_wrapper(move_wrapper &&) = default;
-    move_wrapper &operator=(move_wrapper &&) = default;
-
-    move_wrapper(const move_wrapper &);
-    move_wrapper &operator=(const move_wrapper &);
-};
-
-template <typename T>
-auto move_handler(T &&t) -> move_wrapper<typename std::decay<T>::type>
-{
-    return std::move(t);
-}
-}
-
-void Server::processEvent(const std::function<void()> &&func)
-{
-    if(_state == State::Stopped)
-        return;
-    std::shared_lock<std::shared_timed_mutex> lock(_stateLock);
-    _ioService.post(
-        move_handler([ this, func(std::move(func)), lock(std::move(lock)) ]
-                     {
-                         if(_state == State::NotStarted)
-                         {
-                             return processEvent(std::move(func));
-                         }
-                         func();
-                     }));
 }
 
 std::locale Server::getLocale(std::string locale)
@@ -153,7 +68,7 @@ std::locale Server::getLocale(std::string locale)
 
 bool Server::dispatchCommand(CommandSender &sender, const std::string &command)
 {
-    std::lock_guard<std::mutex> lock(_registerCommandLock);
+    std::lock_guard<std::mutex> lock(_commandListLock);
     auto commandName = command.substr(0, command.find(' '));
     const auto &it = _commandList.find(commandName);
     if(it != _commandList.end())
@@ -170,16 +85,18 @@ bool Server::dispatchCommand(CommandSender &sender, const std::string &command)
 Server::RegisteredCommandHandler
 Server::registerCommand(const std::string &command,
                         const boost::locale::message &help,
-                        Server::CommandHandler handler)
+                        Server::CommandHandler &&handler)
 {
-    std::lock_guard<std::mutex> lock(_registerCommandLock);
+    std::lock_guard<std::mutex> lock(_commandListLock);
     // TODO: C++17 non-explicit tuples
-    return _commandList.insert({command, std::make_tuple(help, handler)}).first;
+    return _commandList.insert(
+                           {command, std::make_tuple(help, std::move(handler))})
+        .first;
 }
 
 void Server::unregisterCommand(Server::RegisteredCommandHandler handle)
 {
-    std::lock_guard<std::mutex> lock(_registerCommandLock);
+    std::lock_guard<std::mutex> lock(_commandListLock);
     _commandList.erase(handle);
 }
 
@@ -202,74 +119,212 @@ std::shared_ptr<ConfigSection> Server::getConfig(const std::string &name)
     return _configManager.getConfig(name);
 }
 
-void Server::start()
+bool Server::lockTask()
 {
-    std::atomic_size_t counter(0);
-    runCriticalTask(
-        [this]
+    std::unique_lock<std::mutex> lock(_stateLock);
+    std::size_t ret = 1;
+    while(_counter < 0)
+    {
+        if(ret)
         {
-            _helpCommand = registerCommand(
-                "help", boost::locale::translate("Display this help"),
-                [this](CommandSender &sender, const std::string &command)
-                {
-                    sender.sendMessage(
-                        boost::locale::translate("List of commands:"));
-                    // TODO: Paging and more
-                    for(const auto &item : _commandList)
+            lock.unlock();
+            ret = _ioService.poll_one();
+            lock.lock();
+        }
+        else
+        {
+            _stateWait.wait(lock);
+            ret = 1;
+        }
+    }
+    if(_dropEvents)
+        return false;
+    _counter++;
+    return true;
+}
+
+void Server::unlockTask()
+{
+    std::unique_lock<std::mutex> lock(_stateLock);
+    if(--_counter == 0)
+    {
+        lock.unlock();
+        _stateWait.notify_one();
+    }
+}
+
+template <Server::LockType type>
+bool Server::lockCritical()
+{
+    std::unique_lock<std::mutex> lock(_stateLock);
+    if(type == LockType::Stop && _dropEvents)
+        return false;
+    std::size_t ret = 1;
+    while(_counter != 0)
+    {
+        if(ret)
+        {
+            lock.unlock();
+            ret = _ioService.poll_one();
+            lock.lock();
+        }
+        else
+        {
+            _stateWait.wait(lock);
+            ret = 1;
+        }
+    }
+    _counter--;
+    if(type == LockType::Start)
+    {
+        _dropEvents = false;
+    }
+    else
+    {
+        _dropEvents = true;
+    }
+    return true;
+}
+
+void Server::unlockCritical()
+{
+    std::unique_lock<std::mutex> lock(_stateLock);
+    if(++_counter == 0)
+    {
+        lock.unlock();
+        _stateWait.notify_all();
+    }
+}
+
+template <typename Handler, typename... Fn>
+void Server::asyncRunCritical(Handler &&handler, Fn &&... func)
+{
+    {
+        // Simpler lock since we're holding already
+        std::lock_guard<std::mutex> lock(_stateLock);
+        _counter -= sizeof...(func);
+    }
+    // TODO: C++17 fold expressions
+    int dummy[] = {
+        0,
+        (_ioService.post([ this, func = std::forward<Fn>(func), handler ]
+                         {
+                             func();
+                             // TODO: exceptions
+                             {
+                                 std::unique_lock<std::mutex> lock(_stateLock);
+                                 if(++_counter == -1)
+                                 {
+                                     lock.unlock();
+                                     handler();
+                                 }
+                             }
+                         }),
+         0)...};
+}
+
+void Server::start(boost::asio::coroutine coroutine)
+{
+    BOOST_ASIO_CORO_REENTER(coroutine)
+    {
+        lockCritical<LockType::Start>();
+        _config = _configManager.getConfig("cenisys");
+        if(_config->getBool(ConfigSection::Path() / "console", true))
+        {
+            _terminalConsole =
+                std::make_unique<ThreadedTerminalConsole>(*this, _ioService);
+        }
+        log(boost::locale::format(
+                boost::locale::translate("Starting Cenisys {1}.")) %
+            SERVER_VERSION);
+        {
+            unsigned int threads =
+                _config->getUInt(ConfigSection::Path() / "threads", 0);
+            if(threads == 0)
+                threads = std::thread::hardware_concurrency();
+            if(threads == 0)
+                threads = 1;
+            log(boost::locale::format(boost::locale::translate(
+                    "Spinning up {1} thread.", "Spinning up {1} threads.",
+                    threads)) %
+                threads);
+            for(unsigned int i = 1; i < threads; i++)
+            {
+                _threads.emplace_back(
+                    static_cast<std::size_t (boost::asio::io_service::*)()>(
+                        &boost::asio::io_service::run),
+                    &_ioService);
+            }
+        }
+        BOOST_ASIO_CORO_YIELD asyncRunCritical(
+            [this, coroutine]
+            {
+                start(coroutine);
+            },
+            [this]
+            {
+                _work =
+                    std::make_unique<boost::asio::io_service::work>(_ioService);
+            },
+            [this]
+            {
+                _helpCommand = registerCommand(
+                    "help", boost::locale::translate("Display this help"),
+                    [this](CommandSender &sender, const std::string &command)
                     {
                         sender.sendMessage(
-                            boost::locale::format("/{1}: {2}") % item.first %
-                            std::get<boost::locale::message>(item.second));
-                    }
-                });
-        },
-        counter);
-    runCriticalTask(
-        [this]
-        {
-            _defaultCommands = std::make_unique<DefaultCommandHandlers>(*this);
-        },
-        counter);
-    waitCriticalTask(counter);
-    _termSignals.async_wait(std::bind(&Server::terminate, this));
-    _state = State::Running;
-}
-
-void Server::stop()
-{
-    std::atomic_size_t counter(0);
-    _termSignals.cancel();
-    runCriticalTask(
-        [this]
-        {
-            _defaultCommands.reset();
-        },
-        counter);
-    runCriticalTask(
-        [this]
-        {
-            unregisterCommand(_helpCommand);
-        },
-        counter);
-    waitCriticalTask(counter);
-}
-
-template <typename Fn>
-void Server::runCriticalTask(Fn &&func, std::atomic_size_t &counter)
-{
-    counter++;
-    _ioService.post([ func(std::forward<Fn>(func)), &counter ]
-                    {
-                        func();
-                        counter--;
+                            boost::locale::translate("List of commands:"));
+                        // TODO: Paging and more
+                        for(const auto &item : _commandList)
+                        {
+                            sender.sendMessage(
+                                boost::locale::format("/{1}: {2}") %
+                                item.first %
+                                std::get<boost::locale::message>(item.second));
+                        }
                     });
+            },
+            [this]
+            {
+                _defaultCommands =
+                    std::make_unique<DefaultCommandHandlers>(*this);
+            });
+        _termSignals.async_wait([this]
+                                {
+                                    terminate();
+                                });
+        unlockCritical();
+    }
 }
 
-void Server::waitCriticalTask(std::atomic_size_t &counter)
+void Server::stop(boost::asio::coroutine coroutine)
 {
-    while(counter != 0)
+    BOOST_ASIO_CORO_REENTER(coroutine)
     {
-        _ioService.poll_one();
+        if(!lockCritical<LockType::Stop>())
+            return;
+        _termSignals.cancel();
+        BOOST_ASIO_CORO_YIELD asyncRunCritical(
+            [this, coroutine]
+            {
+                stop(coroutine);
+            },
+            [this]
+            {
+                _defaultCommands.reset();
+            },
+            [this]
+            {
+                unregisterCommand(_helpCommand);
+            },
+            [this]
+            {
+                _work.reset();
+            });
+        log(boost::locale::translate("Server successfully terminated."));
+        _terminalConsole.reset();
+        _config.reset();
+        unlockCritical();
     }
 }
 

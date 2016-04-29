@@ -36,13 +36,13 @@ public:
 
     virtual Server &getServer() = 0;
 
-    virtual void sendMessage(const boost::locale::format &content) = 0;
+    template <typename T>
+    void sendMessage(const T &content)
+    {
+        sendMessage(boost::locale::format("{1}") % content);
+    }
 
-    //!
-    //! \brief Log translated text to the server log.
-    //! \param content The content in string.
-    //!
-    virtual void sendMessage(const boost::locale::message &content) = 0;
+    virtual void sendMessage(const boost::locale::format &content) = 0;
 };
 
 } // namespace cenisys

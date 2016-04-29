@@ -20,17 +20,17 @@
 #ifndef CENISYS_SERVER_H
 #define CENISYS_SERVER_H
 
-#include <atomic>
+#include <condition_variable>
 #include <forward_list>
 #include <locale>
 #include <map>
 #include <memory>
 #include <mutex>
-#include <shared_mutex>
 #include <thread>
 #include <vector>
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/signal_set.hpp>
+#include <boost/asio/coroutine.hpp>
 #include <boost/filesystem/path.hpp>
 #include <boost/locale/format.hpp>
 #include <boost/locale/generator.hpp>
@@ -55,9 +55,7 @@ public:
                  std::tuple<boost::locale::message, CommandHandler>>;
     using RegisteredCommandHandler = CommandHandlerList::const_iterator;
 
-    using LogFormat = std::function<void(const boost::locale::format &)>;
-    using LogMessage = std::function<void(const boost::locale::message &)>;
-    using LoggerBackend = std::tuple<LogFormat, LogMessage>;
+    using LoggerBackend = std::function<void(const boost::locale::format &)>;
     using LoggerBackendList = std::forward_list<LoggerBackend>;
     using RegisteredLoggerBackend = LoggerBackendList::const_iterator;
 
@@ -65,17 +63,48 @@ public:
            boost::locale::generator &localeGen);
     ~Server();
 
+    //!
+    //! \brief Run the server. Blocks until termination.
+    //! \return 0 if successfully terminated.
+    //!
     int run();
-    void terminate();
+    template <typename Executor>
+    void terminate(Executor &e)
+    {
+        _ioService.post([this]
+                        {
+                            stop();
+                        });
+    }
+    //!
+    //! \brief Terminate the server.
+    //!
+    void terminate() { terminate(_ioService); }
 
-    void processEvent(const std::function<void()> &&func);
+    template <typename Executor, typename Fn>
+    void processEvent(Executor &executor, Fn &&func)
+    {
+        executor.post([ this, func = std::forward<Fn>(func) ]
+                      {
+                          if(!lockTask())
+                              return;
+                          func();
+                          unlockTask();
+                      });
+    }
+
+    template <typename Fn>
+    void processEvent(Fn &&func)
+    {
+        processEvent(_ioService, std::forward<Fn>(func));
+    }
 
     std::locale getLocale(std::string locale);
     bool dispatchCommand(CommandSender &sender, const std::string &command);
 
     RegisteredCommandHandler registerCommand(const std::string &command,
                                              const boost::locale::message &help,
-                                             CommandHandler handler);
+                                             CommandHandler &&handler);
     void unregisterCommand(RegisteredCommandHandler handle);
 
     template <typename T>
@@ -84,8 +113,8 @@ public:
         boost::locale::format formatted("{1}");
         formatted % content;
         std::lock_guard<std::mutex> lock(_loggerBackendListLock);
-        for(Server::LoggerBackend backend : _loggerBackends)
-            std::get<Server::LogFormat>(backend)(formatted);
+        for(const auto &backend : _loggerBackends)
+            backend(formatted);
     }
 
     RegisteredLoggerBackend registerBackend(LoggerBackend backend);
@@ -94,38 +123,49 @@ public:
     std::shared_ptr<ConfigSection> getConfig(const std::string &name);
 
 private:
-    enum class State
+    bool lockTask();
+    void unlockTask();
+    enum class LockType : bool
     {
-        NotStarted, // Postpone all events
-        Running,    // Accept events
-        Stopped,    // Discard any events
+        Start = true,
+        Stop = false
     };
+    template <LockType type>
+    bool lockCritical();
+    void unlockCritical();
 
-    void start();
-    void stop();
+    template <typename Handler, typename... Fn>
+    void asyncRunCritical(Handler &&handler, Fn &&... func);
 
-    template <typename Fn>
-    void runCriticalTask(Fn &&func, std::atomic_size_t &counter);
-    void waitCriticalTask(std::atomic_size_t &counter);
+    void start(boost::asio::coroutine coroutine = {});
+    void stop(boost::asio::coroutine coroutine = {});
 
-    std::atomic<State> _state;
-    // TODO: shared_mutex is C++17
-    std::shared_timed_mutex _stateLock;
-    std::locale _oldCoutLoc;
+    std::mutex _stateLock;
+    std::condition_variable _stateWait;
+    int _counter;
+    bool _dropEvents;
+
     boost::filesystem::path _dataDir;
+
     boost::locale::generator &_localeGen;
+
     boost::asio::io_service _ioService;
+    std::unique_ptr<boost::asio::io_service::work> _work;
     std::vector<std::thread> _threads;
     boost::asio::signal_set _termSignals;
+
     CommandHandlerList _commandList;
-    std::mutex _registerCommandLock;
+    std::mutex _commandListLock;
+
     ConfigManager _configManager;
-    std::unique_ptr<ThreadedTerminalConsole> _terminalConsole;
+    std::shared_ptr<ConfigSection> _config;
+
     RegisteredCommandHandler _helpCommand;
     std::unique_ptr<DefaultCommandHandlers> _defaultCommands;
+
     LoggerBackendList _loggerBackends;
     std::mutex _loggerBackendListLock;
-    std::shared_ptr<ConfigSection> _config;
+    std::unique_ptr<ThreadedTerminalConsole> _terminalConsole;
 };
 
 } // namespace cenisys
