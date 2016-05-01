@@ -157,8 +157,6 @@ template <Server::LockType type>
 bool Server::lockCritical()
 {
     std::unique_lock<std::mutex> lock(_stateLock);
-    if(type == LockType::Stop && _dropEvents)
-        return false;
     std::size_t ret = 1;
     while(_counter != 0)
     {
@@ -174,6 +172,8 @@ bool Server::lockCritical()
             ret = 1;
         }
     }
+    if(type == LockType::Stop && _dropEvents)
+        return false;
     _counter--;
     if(type == LockType::Start)
     {
@@ -211,8 +211,7 @@ void Server::asyncRunCritical(Handler &&handler, Fn &&... func)
         _ioService.post(
             [ this, func = std::forward<decltype(func)>(func), handler ]
             {
-                func();
-                // TODO: exceptions
+                BOOST_SCOPE_EXIT_ALL(&)
                 {
                     std::unique_lock<std::mutex> lock(_stateLock);
                     if(++_counter == -1)
@@ -220,7 +219,9 @@ void Server::asyncRunCritical(Handler &&handler, Fn &&... func)
                         lock.unlock();
                         handler();
                     }
-                }
+                };
+                func();
+
             });
     };
     int dummy[] = {0, (lambda(std::forward<Fn>(func)), 0)...};
@@ -253,10 +254,10 @@ void Server::start(boost::asio::coroutine coroutine)
                 threads);
             for(unsigned int i = 1; i < threads; i++)
             {
-                _threads.emplace_back(
-                    static_cast<std::size_t (boost::asio::io_service::*)()>(
-                        &boost::asio::io_service::run),
-                    &_ioService);
+                _threads.emplace_back([this]
+                                      {
+                                          _ioService.run();
+                                      });
             }
         }
         BOOST_ASIO_CORO_YIELD asyncRunCritical(

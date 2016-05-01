@@ -54,7 +54,6 @@ private:
     std::atomic_bool _running;
 
     std::thread _readThread;
-    boost::asio::strand _commandStrand;
 
     std::thread _writeThread;
     std::locale _locale;

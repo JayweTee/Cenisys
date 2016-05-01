@@ -22,6 +22,7 @@
 
 #include <condition_variable>
 #include <forward_list>
+#include <future>
 #include <locale>
 #include <map>
 #include <memory>
@@ -35,6 +36,7 @@
 #include <boost/locale/format.hpp>
 #include <boost/locale/generator.hpp>
 #include <boost/locale/message.hpp>
+#include <boost/scope_exit.hpp>
 #include "server/configmanager.h"
 
 namespace cenisys
@@ -84,13 +86,21 @@ public:
     template <typename Executor, typename Fn>
     void processEvent(Executor &executor, Fn &&func)
     {
-        executor.post([ this, func = std::forward<Fn>(func) ]
-                      {
-                          if(!lockTask())
-                              return;
-                          func();
-                          unlockTask();
-                      });
+        std::promise<void> promise;
+        std::future<void> future = promise.get_future();
+        // HACK: asio cannot dispatch move-only handlers
+        executor.dispatch([ this, func = std::forward<Fn>(func), &promise ]
+                          {
+                              if(!lockTask())
+                                  return;
+                              BOOST_SCOPE_EXIT_ALL(&)
+                              {
+                                  promise.set_value();
+                                  unlockTask();
+                              };
+                              func();
+                          });
+        future.get();
     }
 
     template <typename Fn>
