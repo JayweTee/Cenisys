@@ -30,6 +30,27 @@
 #include "server/server.h"
 #include "config/configsection.h"
 
+namespace
+{
+struct BoolAlpha
+{
+    bool data;
+    BoolAlpha() {}
+    BoolAlpha(bool data) : data(data) {}
+    operator bool() const { return data; }
+    friend std::ostream &operator<<(std::ostream &out, BoolAlpha b)
+    {
+        out << std::boolalpha << b.data;
+        return out;
+    }
+    friend std::istream &operator>>(std::istream &in, BoolAlpha &b)
+    {
+        in >> std::boolalpha >> b.data;
+        return in;
+    }
+};
+}
+
 namespace cenisys
 {
 
@@ -72,7 +93,7 @@ ConfigSection::~ConfigSection()
 
 bool ConfigSection::getBool(const ConfigSection::Path &path, bool defaultValue)
 {
-    return getValue(path, defaultValue);
+    return getValue<bool, BoolAlpha>(path, defaultValue);
 }
 
 int ConfigSection::getInt(const ConfigSection::Path &path, int defaultValue)
@@ -102,7 +123,7 @@ std::vector<bool>
 ConfigSection::getBoolList(const ConfigSection::Path &path,
                            const std::vector<bool> &defaultValue)
 {
-    return getList(path, defaultValue);
+    return getList<bool, BoolAlpha>(path, defaultValue);
 }
 
 std::vector<int> ConfigSection::getIntList(const ConfigSection::Path &path,
@@ -247,14 +268,14 @@ YAML::Node ConfigSection::correctParent(const ConfigSection::Path &path)
     return current;
 }
 
-template <typename T>
+template <typename T, typename Wrapper>
 T ConfigSection::getValue(const ConfigSection::Path &path,
                           const T &defaultValue)
 {
     std::lock_guard<std::mutex> lock(_lock);
     YAML::Node parent = correctParent(path.up());
     std::string key = path.getItems().back();
-    T result;
+    Wrapper result;
     if(parent[key] && !parent.IsNull() &&
        (!parent[key].IsScalar() ||
         !boost::conversion::try_lexical_convert(parent[key].Scalar(), result)))
@@ -273,7 +294,7 @@ T ConfigSection::getValue(const ConfigSection::Path &path,
     return result;
 }
 
-template <typename T>
+template <typename T, typename Wrapper>
 std::vector<T> ConfigSection::getList(const ConfigSection::Path &path,
                                       const std::vector<T> &defaultValue)
 {
@@ -288,7 +309,7 @@ std::vector<T> ConfigSection::getList(const ConfigSection::Path &path,
             {
                 if(!scalar.IsScalar())
                     return false;
-                T value;
+                Wrapper value;
                 if(!boost::conversion::try_lexical_convert(scalar.Scalar(),
                                                            value))
                     return false;

@@ -86,9 +86,9 @@ public:
     std::vector<Path> getKeys(const Path &path);
 
 private:
-    template <typename T>
+    template <typename T, typename Wrapper = T>
     T getValue(const Path &path, const T &defaultValue);
-    template <typename T>
+    template <typename T, typename Wrapper = T>
     std::vector<T> getList(const Path &path,
                            const std::vector<T> &defaultValue);
 
