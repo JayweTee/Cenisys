@@ -1,3 +1,6 @@
+#cmakedefine UNIX
+#cmakedefine WIN32
+
 // Version
 #cmakedefine VERSION_SUFFIX "${VERSION_SUFFIX}"
 #ifdef VERSION_SUFFIX

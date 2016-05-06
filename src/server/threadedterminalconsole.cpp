@@ -25,23 +25,24 @@
 namespace cenisys
 {
 
-ThreadedTerminalConsole::ThreadedTerminalConsole(
-    Server &server, boost::asio::io_service &ioService)
-    : _server(server)
+ThreadedTerminalConsole::ThreadedTerminalConsole()
 {
-    _running = true;
-    _readThread = std::thread(&ThreadedTerminalConsole::readWorker, this);
-    _writeThread = std::thread(&ThreadedTerminalConsole::writeWorker, this);
-    _loggerBackendHandle =
-        _server.registerBackend([this](const boost::locale::format &param)
-                                {
-                                    log(param);
-                                });
 }
 
 ThreadedTerminalConsole::~ThreadedTerminalConsole()
 {
-    _server.unregisterBackend(_loggerBackendHandle);
+}
+
+void ThreadedTerminalConsole::attach(Console &console)
+{
+    _console = &console;
+    _running = true;
+    _readThread = std::thread(&ThreadedTerminalConsole::readWorker, this);
+    _writeThread = std::thread(&ThreadedTerminalConsole::writeWorker, this);
+}
+
+void ThreadedTerminalConsole::detach()
+{
     std::unique_lock<std::mutex> lock(_writeQueueLock);
     _running = false;
     lock.unlock();
@@ -54,16 +55,7 @@ ThreadedTerminalConsole::~ThreadedTerminalConsole()
                   << std::endl;
     }
     _readThread.join();
-}
-
-Server &ThreadedTerminalConsole::getServer()
-{
-    return _server;
-}
-
-void ThreadedTerminalConsole::sendMessage(const boost::locale::format &content)
-{
-    log(content);
+    _console = nullptr;
 }
 
 void ThreadedTerminalConsole::readWorker()
@@ -73,14 +65,15 @@ void ThreadedTerminalConsole::readWorker()
         std::string buf;
         std::getline(std::cin, buf);
         if(!buf.empty())
-            _server.processEvent([ this, buf = std::move(buf) ]
-                                 {
-                                     _server.dispatchCommand(*this,
-                                                             std::move(buf));
-                                 });
+            _console->getServer().processEvent(
+                [ this, buf = std::move(buf) ]
+                {
+                    _console->getServer().dispatchCommand(*_console,
+                                                          std::move(buf));
+                });
         if(!std::cin)
         {
-            _server.terminate();
+            _console->getServer().terminate();
             break;
         }
     }

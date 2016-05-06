@@ -17,6 +17,10 @@
  * You should have received a copy of the GNU General Public License
  * along with Cenisys.  If not, see <http://www.gnu.org/licenses/>.
  */
+#include "config.h"
+#if defined(UNIX)
+#include <unistd.h>
+#endif
 #include <functional>
 #include <mutex>
 #include <iostream>
@@ -24,11 +28,11 @@
 #include <boost/locale/format.hpp>
 #include <boost/locale/generator.hpp>
 #include <boost/locale/message.hpp>
-#include "config.h"
 #include "config/configsection.h"
 #include "command/commandsender.h"
 #include "command/defaultcommandhandlers.h"
 #include "server/threadedterminalconsole.h"
+#include "server/posixasyncterminalconsole.h"
 #include "server/server.h"
 
 namespace cenisys
@@ -53,7 +57,7 @@ int Server::run()
                         start();
                     });
     _ioService.run();
-    // Currently there's no way to terminate threads in io_service.
+    // TODO: Currently there's no way to terminate threads in io_service.
     for(auto &item : _threads)
     {
         item.join();
@@ -100,18 +104,17 @@ void Server::unregisterCommand(Server::RegisteredCommandHandler handle)
     _commandList.erase(handle);
 }
 
-Server::RegisteredLoggerBackend
-Server::registerBackend(Server::LoggerBackend backend)
+Server::RegisteredConsole Server::registerConsole(ConsoleBackend &backend)
 {
-    std::lock_guard<std::mutex> lock(_loggerBackendListLock);
-    _loggerBackends.push_front(backend);
-    return _loggerBackends.before_begin();
+    std::lock_guard<std::mutex> lock(_consoleListLock);
+    _consoles.emplace_front(*this, backend);
+    return _consoles.before_begin();
 }
 
-void Server::unregisterBackend(Server::RegisteredLoggerBackend handle)
+void Server::unregisterConsole(Server::RegisteredConsole handle)
 {
-    std::lock_guard<std::mutex> lock(_loggerBackendListLock);
-    _loggerBackends.erase_after(handle);
+    std::lock_guard<std::mutex> lock(_consoleListLock);
+    _consoles.erase_after(handle);
 }
 
 std::shared_ptr<ConfigSection> Server::getConfig(const std::string &name)
@@ -123,6 +126,8 @@ bool Server::lockTask()
 {
     std::unique_lock<std::mutex> lock(_stateLock);
     std::size_t ret = 1;
+    if(_dropEvents)
+        return false;
     while(_counter < 0)
     {
         if(ret)
@@ -158,6 +163,8 @@ bool Server::lockCritical()
 {
     std::unique_lock<std::mutex> lock(_stateLock);
     std::size_t ret = 1;
+    if(type == LockType::Stop && _dropEvents)
+        return false;
     while(_counter != 0)
     {
         if(ret)
@@ -225,6 +232,8 @@ void Server::asyncRunCritical(Handler &&handler, Fn &&... func)
             });
     };
     int dummy[] = {0, (lambda(std::forward<Fn>(func)), 0)...};
+    // Notify all threads to make them poll for handlers again
+    _stateWait.notify_all();
 }
 
 void Server::start(boost::asio::coroutine coroutine)
@@ -232,15 +241,33 @@ void Server::start(boost::asio::coroutine coroutine)
     BOOST_ASIO_CORO_REENTER(coroutine)
     {
         lockCritical<LockType::Start>();
+
         _config = _configManager.getConfig("cenisys");
+
         if(_config->getBool(ConfigSection::Path() / "console", true))
         {
-            _terminalConsole =
-                std::make_unique<ThreadedTerminalConsole>(*this, _ioService);
+#if defined(UNIX)
+            struct stat stdin, stdout;
+            fstat(STDIN_FILENO, &stdin);
+            fstat(STDOUT_FILENO, &stdout);
+            if((isatty(STDIN_FILENO) || S_ISFIFO(stdin.st_mode)) &&
+               (isatty(STDOUT_FILENO) || S_ISFIFO(stdout.st_mode)))
+            {
+                _terminalConsole =
+                    std::make_shared<PosixAsyncTerminalConsole>(_ioService);
+            }
+            else
+#endif
+            {
+                _terminalConsole = std::make_shared<ThreadedTerminalConsole>();
+            }
+            _terminalConsoleHandle = registerConsole(*_terminalConsole);
         }
+
         log(boost::locale::format(
                 boost::locale::translate("Starting Cenisys {1}.")) %
             SERVER_VERSION);
+
         {
             unsigned int threads =
                 _config->getUInt(ConfigSection::Path() / "threads", 0);
@@ -260,6 +287,7 @@ void Server::start(boost::asio::coroutine coroutine)
                                       });
             }
         }
+
         BOOST_ASIO_CORO_YIELD asyncRunCritical(
             [this, coroutine]
             {
@@ -293,6 +321,7 @@ void Server::start(boost::asio::coroutine coroutine)
                 _defaultCommands =
                     std::make_unique<DefaultCommandHandlers>(*this);
             });
+
         _termSignals.async_wait(
             [this](const boost::system::error_code &ec, int signal)
             {
@@ -300,6 +329,9 @@ void Server::start(boost::asio::coroutine coroutine)
                     return;
                 terminate();
             });
+
+        log(boost::locale::translate("Server ready."));
+
         unlockCritical();
     }
 }
@@ -310,7 +342,11 @@ void Server::stop(boost::asio::coroutine coroutine)
     {
         if(!lockCritical<LockType::Stop>())
             return;
+
+        log(boost::locale::translate("Stopping server…"));
+
         _termSignals.cancel();
+
         BOOST_ASIO_CORO_YIELD asyncRunCritical(
             [this, coroutine]
             {
@@ -328,9 +364,17 @@ void Server::stop(boost::asio::coroutine coroutine)
             {
                 _work.reset();
             });
+
         log(boost::locale::translate("Server successfully terminated."));
-        _terminalConsole.reset();
+
+        if(_config->getBool(ConfigSection::Path() / "console", true))
+        {
+            unregisterConsole(_terminalConsoleHandle);
+            _terminalConsole.reset();
+        }
+
         _config.reset();
+
         unlockCritical();
     }
 }

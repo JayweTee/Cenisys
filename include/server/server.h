@@ -38,6 +38,7 @@
 #include <boost/locale/message.hpp>
 #include <boost/scope_exit.hpp>
 #include "server/configmanager.h"
+#include "server/console.h"
 
 namespace cenisys
 {
@@ -45,7 +46,6 @@ namespace cenisys
 class ConfigSection;
 class DefaultCommandHandlers;
 class CommandSender;
-class ThreadedTerminalConsole;
 
 class Server
 {
@@ -57,9 +57,8 @@ public:
                  std::tuple<boost::locale::message, CommandHandler>>;
     using RegisteredCommandHandler = CommandHandlerList::const_iterator;
 
-    using LoggerBackend = std::function<void(const boost::locale::format &)>;
-    using LoggerBackendList = std::forward_list<LoggerBackend>;
-    using RegisteredLoggerBackend = LoggerBackendList::const_iterator;
+    using ConsoleList = std::forward_list<Console>;
+    using RegisteredConsole = ConsoleList::const_iterator;
 
     Server(const boost::filesystem::path &dataDir,
            boost::locale::generator &localeGen);
@@ -91,13 +90,10 @@ public:
         // HACK: asio cannot dispatch move-only handlers
         executor.dispatch([ this, func = std::forward<Fn>(func), &promise ]
                           {
+                              BOOST_SCOPE_EXIT_ALL(&) { promise.set_value(); };
                               if(!lockTask())
                                   return;
-                              BOOST_SCOPE_EXIT_ALL(&)
-                              {
-                                  promise.set_value();
-                                  unlockTask();
-                              };
+                              BOOST_SCOPE_EXIT_ALL(&) { unlockTask(); };
                               func();
                           });
         future.get();
@@ -120,15 +116,13 @@ public:
     template <typename T>
     void log(const T &content)
     {
-        boost::locale::format formatted("{1}");
-        formatted % content;
-        std::lock_guard<std::mutex> lock(_loggerBackendListLock);
-        for(const auto &backend : _loggerBackends)
-            backend(formatted);
+        std::lock_guard<std::mutex> lock(_consoleListLock);
+        for(auto &console : _consoles)
+            console.log(content);
     }
 
-    RegisteredLoggerBackend registerBackend(LoggerBackend backend);
-    void unregisterBackend(RegisteredLoggerBackend handle);
+    RegisteredConsole registerConsole(ConsoleBackend &backend);
+    void unregisterConsole(RegisteredConsole handle);
 
     std::shared_ptr<ConfigSection> getConfig(const std::string &name);
 
@@ -173,9 +167,10 @@ private:
     RegisteredCommandHandler _helpCommand;
     std::unique_ptr<DefaultCommandHandlers> _defaultCommands;
 
-    LoggerBackendList _loggerBackends;
-    std::mutex _loggerBackendListLock;
-    std::unique_ptr<ThreadedTerminalConsole> _terminalConsole;
+    ConsoleList _consoles;
+    std::mutex _consoleListLock;
+    std::shared_ptr<ConsoleBackend> _terminalConsole;
+    RegisteredConsole _terminalConsoleHandle;
 };
 
 } // namespace cenisys
