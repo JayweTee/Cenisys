@@ -20,12 +20,14 @@
 #include <iostream>
 #include <boost/locale/format.hpp>
 #include "server/server.h"
-#include "threadedterminalconsole.h"
+#include "server/terminal/terminalcolor.h"
+#include "server/terminal/threadedterminalconsole.h"
 
 namespace cenisys
 {
 
-ThreadedTerminalConsole::ThreadedTerminalConsole()
+ThreadedTerminalConsole::ThreadedTerminalConsole(bool enableColor)
+    : _enableColor(enableColor)
 {
 }
 
@@ -104,7 +106,8 @@ void ThreadedTerminalConsole::writeWorker()
 void ThreadedTerminalConsole::log(const boost::locale::format &content)
 {
     std::unique_lock<std::mutex> lock(_writeQueueLock);
-    _writeQueue.push(content.str());
+    _writeQueue.push(_enableColor ? ansiColorize(content.str())
+                                  : stripColor(content.str()));
     lock.unlock();
     _writeQueueNotifier.notify_one();
 }

@@ -1,5 +1,5 @@
 /*
- * PosixAsyncTerminalConsole
+ * ThreadedTerminalConsole
  * Copyright (C) 2016 iTX Technologies
  *
  * This file is part of Cenisys.
@@ -17,54 +17,51 @@
  * You should have received a copy of the GNU General Public License
  * along with Cenisys.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef CENISYS_POSIXASYNCTERMINALCONSOLE_H
-#define CENISYS_POSIXASYNCTERMINALCONSOLE_H
+#ifndef CENISYS_THREADEDTERMINALCONSOLE_H
+#define CENISYS_THREADEDTERMINALCONSOLE_H
 
-#include "config.h"
-#if defined(UNIX)
-
-#include <memory>
+#include <atomic>
+#include <condition_variable>
+#include <locale>
+#include <mutex>
+#include <queue>
+#include <thread>
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/strand.hpp>
-#include <boost/asio/streambuf.hpp>
-#include <boost/asio/posix/stream_descriptor.hpp>
-#include "config.h"
 #include "server/server.h"
 #include "server/consolebackend.h"
 
 namespace cenisys
 {
 
-class PosixAsyncTerminalConsole
-    : public ConsoleBackend,
-      public std::enable_shared_from_this<PosixAsyncTerminalConsole>
+class ThreadedTerminalConsole : public ConsoleBackend
 {
 public:
-    PosixAsyncTerminalConsole(boost::asio::io_service &ioService);
-    ~PosixAsyncTerminalConsole();
+    ThreadedTerminalConsole(bool enableColor);
+    ~ThreadedTerminalConsole();
 
     void attach(Console &console);
     void detach();
+
     void log(const boost::locale::format &content);
 
 private:
-    void asyncRead();
-    void asyncWrite();
+    void readWorker();
+    void writeWorker();
+
+    bool _enableColor;
 
     Console *_console;
-    std::mutex _consoleLock;
-    boost::asio::io_service &_ioService;
-    boost::asio::posix::stream_descriptor _stdin;
-    boost::asio::posix::stream_descriptor _stdout;
+    std::atomic_bool _running;
 
-    boost::asio::streambuf _readBuffer;
-
-    boost::asio::strand _writeStrand;
-    boost::asio::streambuf _writeBuffer;
+    std::thread _readThread;
+    std::thread _writeThread;
+    std::locale _locale;
+    std::queue<std::string> _writeQueue;
+    std::mutex _writeQueueLock;
+    std::condition_variable _writeQueueNotifier;
 };
 
 } // namespace cenisys
 
-#endif
-
-#endif // CENISYS_POSIXASYNCTERMINALCONSOLE_H
+#endif // CENISYS_THREADEDTERMINALCONSOLE_H

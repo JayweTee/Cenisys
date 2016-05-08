@@ -31,8 +31,8 @@
 #include "config/configsection.h"
 #include "command/commandsender.h"
 #include "command/defaultcommandhandlers.h"
-#include "server/threadedterminalconsole.h"
-#include "server/posixasyncterminalconsole.h"
+#include "server/terminal/threadedterminalconsole.h"
+#include "server/terminal/posixasyncterminalconsole.h"
 #include "server/server.h"
 
 namespace cenisys
@@ -244,8 +244,34 @@ void Server::start(boost::asio::coroutine coroutine)
 
         _config = _configManager.getConfig("cenisys");
 
-        if(_config->getBool(ConfigSection::Path() / "console", true))
+        if(_config->getBool(ConfigSection::Path() / "console" / "enable", true))
         {
+        setColor:
+            bool enableColor;
+            auto colorConfig = _config->getString(
+                ConfigSection::Path() / "console" / "color", "auto");
+            if(colorConfig == "always")
+            {
+                enableColor = true;
+            }
+            else if(colorConfig == "auto")
+            {
+                enableColor = false;
+#if defined(UNIX)
+                enableColor = isatty(STDOUT_FILENO);
+#endif
+            }
+            else if(colorConfig == "never")
+            {
+                enableColor = false;
+            }
+            else
+            {
+                _config->setString(ConfigSection::Path() / "console" / "color",
+                                   "auto");
+                goto setColor;
+            }
+
 #if defined(UNIX)
             struct stat stdin, stdout;
             fstat(STDIN_FILENO, &stdin);
@@ -253,13 +279,14 @@ void Server::start(boost::asio::coroutine coroutine)
             if((isatty(STDIN_FILENO) || S_ISFIFO(stdin.st_mode)) &&
                (isatty(STDOUT_FILENO) || S_ISFIFO(stdout.st_mode)))
             {
-                _terminalConsole =
-                    std::make_shared<PosixAsyncTerminalConsole>(_ioService);
+                _terminalConsole = std::make_shared<PosixAsyncTerminalConsole>(
+                    _ioService, enableColor);
             }
             else
 #endif
             {
-                _terminalConsole = std::make_shared<ThreadedTerminalConsole>();
+                _terminalConsole =
+                    std::make_shared<ThreadedTerminalConsole>(enableColor);
             }
             _terminalConsoleHandle = registerConsole(*_terminalConsole);
         }
@@ -367,7 +394,7 @@ void Server::stop(boost::asio::coroutine coroutine)
 
         log(boost::locale::translate("Server successfully terminated."));
 
-        if(_config->getBool(ConfigSection::Path() / "console", true))
+        if(_terminalConsole)
         {
             unregisterConsole(_terminalConsoleHandle);
             _terminalConsole.reset();

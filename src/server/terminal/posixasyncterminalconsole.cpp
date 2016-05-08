@@ -24,14 +24,16 @@
 #include <future>
 #include <boost/asio/read_until.hpp>
 #include <boost/asio/write.hpp>
-#include "posixasyncterminalconsole.h"
+#include "server/terminal/terminalcolor.h"
+#include "server/terminal/posixasyncterminalconsole.h"
 
 namespace cenisys
 {
 
 PosixAsyncTerminalConsole::PosixAsyncTerminalConsole(
-    boost::asio::io_service &ioService)
-    : _ioService(ioService), _stdin(ioService, dup(STDIN_FILENO)),
+    boost::asio::io_service &ioService, bool enableColor)
+    : _enableColor(enableColor), _ioService(ioService),
+      _stdin(ioService, dup(STDIN_FILENO)),
       _stdout(ioService, dup(STDOUT_FILENO)), _writeStrand(ioService)
 {
 }
@@ -60,7 +62,9 @@ void PosixAsyncTerminalConsole::detach()
 
 void PosixAsyncTerminalConsole::log(const boost::locale::format &content)
 {
-    std::string message = content.str() + '\n';
+    std::string message = (_enableColor ? ansiColorize(content.str())
+                                        : stripColor(content.str())) +
+                          '\n';
     _writeStrand.dispatch(
         [ this, self(shared_from_this()), message = std::move(message) ]
         {

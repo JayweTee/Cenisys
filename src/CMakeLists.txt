@@ -15,8 +15,9 @@ add_library(cenisys SHARED
     command/defaultcommandhandlers.cpp
     config/configsection.cpp
     server/server.cpp
-    server/threadedterminalconsole.cpp
-    server/posixasyncterminalconsole.cpp
+    server/terminal/terminalcolor.cpp
+    server/terminal/threadedterminalconsole.cpp
+    server/terminal/posixasyncterminalconsole.cpp
     server/configmanager.cpp
     )
 target_link_libraries(cenisys PRIVATE
