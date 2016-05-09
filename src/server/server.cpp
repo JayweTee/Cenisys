@@ -291,9 +291,9 @@ void Server::start(boost::asio::coroutine coroutine)
             _terminalConsoleHandle = registerConsole(*_terminalConsole);
         }
 
-        log(boost::locale::format(
-                boost::locale::translate("Starting Cenisys {1}.")) %
-            SERVER_VERSION);
+        log(LogLevel::Info, boost::locale::format(boost::locale::translate(
+                                "Starting Cenisys {1}.")) %
+                                SERVER_VERSION);
 
         {
             unsigned int threads =
@@ -302,10 +302,10 @@ void Server::start(boost::asio::coroutine coroutine)
                 threads = std::thread::hardware_concurrency();
             if(threads == 0)
                 threads = 1;
-            log(boost::locale::format(boost::locale::translate(
-                    "Spinning up {1} thread.", "Spinning up {1} threads.",
-                    threads)) %
-                threads);
+            log(LogLevel::Info, boost::locale::format(boost::locale::translate(
+                                    "Spinning up {1} thread.",
+                                    "Spinning up {1} threads.", threads)) %
+                                    threads);
             for(unsigned int i = 1; i < threads; i++)
             {
                 _threads.emplace_back([this]
@@ -357,7 +357,7 @@ void Server::start(boost::asio::coroutine coroutine)
                 terminate();
             });
 
-        log(boost::locale::translate("Server ready."));
+        log(LogLevel::Info, boost::locale::translate("Server ready."));
 
         unlockCritical();
     }
@@ -370,7 +370,7 @@ void Server::stop(boost::asio::coroutine coroutine)
         if(!lockCritical<LockType::Stop>())
             return;
 
-        log(boost::locale::translate("Stopping server…"));
+        log(LogLevel::Info, boost::locale::translate("Stopping server…"));
 
         _termSignals.cancel();
 
@@ -392,7 +392,8 @@ void Server::stop(boost::asio::coroutine coroutine)
                 _work.reset();
             });
 
-        log(boost::locale::translate("Server successfully terminated."));
+        log(LogLevel::Info,
+            boost::locale::translate("Server successfully terminated."));
 
         if(_terminalConsole)
         {

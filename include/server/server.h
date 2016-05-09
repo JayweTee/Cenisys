@@ -34,11 +34,13 @@
 #include <boost/asio/coroutine.hpp>
 #include <boost/filesystem/path.hpp>
 #include <boost/locale/format.hpp>
+#include <boost/locale/date_time.hpp>
 #include <boost/locale/generator.hpp>
 #include <boost/locale/message.hpp>
 #include <boost/scope_exit.hpp>
 #include "server/configmanager.h"
 #include "server/console.h"
+#include "util/textcolor.h"
 
 namespace cenisys
 {
@@ -50,6 +52,14 @@ class CommandSender;
 class Server
 {
 public:
+    enum class LogLevel
+    {
+        Severe,
+        Warning,
+        Info,
+        Debug,
+    };
+
     using CommandHandler =
         std::function<void(CommandSender &, const std::string &)>;
     using CommandHandlerList =
@@ -113,16 +123,41 @@ public:
                                              CommandHandler &&handler);
     void unregisterCommand(RegisteredCommandHandler handle);
 
-    template <typename T>
-    void log(const T &content)
-    {
-        std::lock_guard<std::mutex> lock(_consoleListLock);
-        for(auto &console : _consoles)
-            console.log(content);
-    }
-
     RegisteredConsole registerConsole(ConsoleBackend &backend);
     void unregisterConsole(RegisteredConsole handle);
+
+    template <typename T>
+    void log(LogLevel level, const T &content)
+    {
+        TextFormat color;
+        boost::locale::message levelText;
+        switch(level)
+        {
+        case LogLevel::Severe:
+            color = TextFormat::Red;
+            levelText = boost::locale::translate("SEVERE");
+            break;
+        case LogLevel::Warning:
+            color = TextFormat::Yellow;
+            levelText = boost::locale::translate("WARNING");
+            break;
+        case LogLevel::Info:
+            color = TextFormat::Gray;
+            levelText = boost::locale::translate("INFO");
+            break;
+        case LogLevel::Debug:
+            color = TextFormat::DarkCyan;
+            levelText = boost::locale::translate("DEBUG");
+            break;
+        }
+        boost::locale::format message(
+            boost::locale::translate("{1}[{2}] [{3}] {4}{5}"));
+        boost::locale::date_time time;
+        message % color % time % levelText % content % TextFormat::Reset;
+        std::lock_guard<std::mutex> lock(_consoleListLock);
+        for(auto &console : _consoles)
+            console.log(message);
+    }
 
     std::shared_ptr<ConfigSection> getConfig(const std::string &name);
 
