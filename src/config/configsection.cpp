@@ -1,5 +1,5 @@
 /*
- * CenisysConfigSection
+ * ConfigSection
  * Copyright (C) 2016 iTX Technologies
  *
  * This file is part of Cenisys.
@@ -28,13 +28,34 @@
 #include <boost/system/error_code.hpp>
 #include <yaml-cpp/yaml.h>
 #include "server/server.h"
-#include "cenisysconfigsection.h"
+#include "config/configsection.h"
+
+namespace
+{
+struct BoolAlpha
+{
+    bool data;
+    BoolAlpha() {}
+    BoolAlpha(bool data) : data(data) {}
+    operator bool() const { return data; }
+    friend std::ostream &operator<<(std::ostream &out, BoolAlpha b)
+    {
+        out << std::boolalpha << b.data;
+        return out;
+    }
+    friend std::istream &operator>>(std::istream &in, BoolAlpha &b)
+    {
+        in >> std::boolalpha >> b.data;
+        return in;
+    }
+};
+}
 
 namespace cenisys
 {
 
-CenisysConfigSection::CenisysConfigSection(
-    Server &server, const boost::filesystem::path &filePath)
+ConfigSection::ConfigSection(Server &server,
+                             const boost::filesystem::path &filePath)
     : _server(server), _filePath(filePath)
 
 {
@@ -47,15 +68,16 @@ CenisysConfigSection::CenisysConfigSection(
     else
     {
         _server.log(
+            Server::LogLevel::Info,
             boost::locale::format(boost::locale::translate(
                 "Config file {1} does not exist, using default values")) %
-            _filePath);
+                _filePath);
     }
     // HACK: yaml-cpp bug
     _root[""];
 }
 
-CenisysConfigSection::~CenisysConfigSection()
+ConfigSection::~ConfigSection()
 {
     if(!boost::filesystem::exists(_filePath.parent_path()))
     {
@@ -70,125 +92,120 @@ CenisysConfigSection::~CenisysConfigSection()
     out << _root;
 }
 
-bool CenisysConfigSection::getBool(const ConfigSection::Path &path,
-                                   bool defaultValue)
+bool ConfigSection::getBool(const ConfigSection::Path &path, bool defaultValue)
+{
+    return getValue<bool, BoolAlpha>(path, defaultValue);
+}
+
+int ConfigSection::getInt(const ConfigSection::Path &path, int defaultValue)
 {
     return getValue(path, defaultValue);
 }
 
-int CenisysConfigSection::getInt(const ConfigSection::Path &path,
-                                 int defaultValue)
+unsigned int ConfigSection::getUInt(const ConfigSection::Path &path,
+                                    unsigned int defaultValue)
 {
     return getValue(path, defaultValue);
 }
 
-unsigned int CenisysConfigSection::getUInt(const ConfigSection::Path &path,
-                                           unsigned int defaultValue)
+double ConfigSection::getDouble(const ConfigSection::Path &path,
+                                double defaultValue)
 {
     return getValue(path, defaultValue);
 }
 
-double CenisysConfigSection::getDouble(const ConfigSection::Path &path,
-                                       double defaultValue)
-{
-    return getValue(path, defaultValue);
-}
-
-std::string CenisysConfigSection::getString(const ConfigSection::Path &path,
-                                            const std::string &defaultValue)
+std::string ConfigSection::getString(const ConfigSection::Path &path,
+                                     const std::string &defaultValue)
 {
     return getValue(path, defaultValue);
 }
 
 std::vector<bool>
-CenisysConfigSection::getBoolList(const ConfigSection::Path &path,
-                                  const std::vector<bool> &defaultValue)
+ConfigSection::getBoolList(const ConfigSection::Path &path,
+                           const std::vector<bool> &defaultValue)
 {
-    return getList(path, defaultValue);
+    return getList<bool, BoolAlpha>(path, defaultValue);
 }
 
-std::vector<int>
-CenisysConfigSection::getIntList(const ConfigSection::Path &path,
-                                 const std::vector<int> &defaultValue)
+std::vector<int> ConfigSection::getIntList(const ConfigSection::Path &path,
+                                           const std::vector<int> &defaultValue)
 {
     return getList(path, defaultValue);
 }
 
 std::vector<unsigned int>
-CenisysConfigSection::getUIntList(const ConfigSection::Path &path,
-                                  const std::vector<unsigned int> &defaultValue)
+ConfigSection::getUIntList(const ConfigSection::Path &path,
+                           const std::vector<unsigned int> &defaultValue)
 {
     return getList(path, defaultValue);
 }
 
 std::vector<double>
-CenisysConfigSection::getDoubleList(const ConfigSection::Path &path,
-                                    const std::vector<double> &defaultValue)
+ConfigSection::getDoubleList(const ConfigSection::Path &path,
+                             const std::vector<double> &defaultValue)
 {
     return getList(path, defaultValue);
 }
 
-std::vector<std::string> CenisysConfigSection::getStringList(
-    const ConfigSection::Path &path,
-    const std::vector<std::string> &defaultValue)
+std::vector<std::string>
+ConfigSection::getStringList(const ConfigSection::Path &path,
+                             const std::vector<std::string> &defaultValue)
 {
     return getList(path, defaultValue);
 }
 
-void CenisysConfigSection::setBool(const ConfigSection::Path &path, bool value)
+void ConfigSection::setBool(const ConfigSection::Path &path, bool value)
 {
     setValue(path, value);
 }
 
-void CenisysConfigSection::setInt(const ConfigSection::Path &path, int value)
+void ConfigSection::setInt(const ConfigSection::Path &path, int value)
 {
     setValue(path, value);
 }
 
-void CenisysConfigSection::setUInt(const ConfigSection::Path &path,
-                                   unsigned int value)
+void ConfigSection::setUInt(const ConfigSection::Path &path, unsigned int value)
 {
     setValue(path, value);
 }
 
-void CenisysConfigSection::setDouble(const ConfigSection::Path &path,
-                                     double value)
+void ConfigSection::setDouble(const ConfigSection::Path &path, double value)
 {
     setValue(path, value);
 }
 
-void CenisysConfigSection::setString(const ConfigSection::Path &path,
-                                     const std::string &value)
+void ConfigSection::setString(const ConfigSection::Path &path,
+                              const std::string &value)
 {
     setValue(path, value);
 }
 
-void CenisysConfigSection::setBoolList(const ConfigSection::Path &path,
-                                       const std::vector<bool> &value)
+void ConfigSection::setBoolList(const ConfigSection::Path &path,
+                                const std::vector<bool> &value)
 {
     setList(path, value);
 }
 
-void CenisysConfigSection::setIntList(const ConfigSection::Path &path,
-                                      const std::vector<int> &value)
+void ConfigSection::setIntList(const ConfigSection::Path &path,
+                               const std::vector<int> &value)
 {
     setList(path, value);
 }
 
-void CenisysConfigSection::setDoubleList(const ConfigSection::Path &path,
-                                         const std::vector<double> &value)
+void ConfigSection::setDoubleList(const ConfigSection::Path &path,
+                                  const std::vector<double> &value)
 {
     setList(path, value);
 }
 
-void CenisysConfigSection::setStringList(const ConfigSection::Path &path,
-                                         const std::vector<std::string> &value)
+void ConfigSection::setStringList(const ConfigSection::Path &path,
+                                  const std::vector<std::string> &value)
 {
     setList(path, value);
 }
 
 std::vector<ConfigSection::Path>
-CenisysConfigSection::getKeys(const ConfigSection::Path &path)
+ConfigSection::getKeys(const ConfigSection::Path &path)
 {
     std::lock_guard<std::mutex> lock(_lock);
     YAML::Node current = correctParent(path);
@@ -199,10 +216,11 @@ CenisysConfigSection::getKeys(const ConfigSection::Path &path)
         if(!item.first.IsScalar() || !item.second.IsScalar())
         {
             _server.log(
+                Server::LogLevel::Warning,
                 boost::locale::format(boost::locale::translate(
                     "Invalid entry in map {1} of configuration file {2}: "
                     "removing")) %
-                path.getItems().back() % _filePath);
+                    path.getItems().back() % _filePath);
             removeList.emplace_back(item.first);
         }
         else
@@ -219,16 +237,17 @@ CenisysConfigSection::getKeys(const ConfigSection::Path &path)
 
 // Note: Truncate the keys before passing. This modifies everything include the
 // end of the path.
-YAML::Node CenisysConfigSection::correctParent(const ConfigSection::Path &path)
+YAML::Node ConfigSection::correctParent(const ConfigSection::Path &path)
 {
     if(_root && !_root.IsNull())
     {
         if(!_root.IsMap())
         {
             _server.log(
+                Server::LogLevel::Warning,
                 boost::locale::format(boost::locale::translate(
                     "Configuration file {1} is invalid: using defaults")) %
-                _filePath);
+                    _filePath);
             _root.reset();
         }
     }
@@ -240,10 +259,11 @@ YAML::Node CenisysConfigSection::correctParent(const ConfigSection::Path &path)
             if(!current[key].IsMap())
             {
                 _server.log(
+                    Server::LogLevel::Warning,
                     boost::locale::format(boost::locale::translate(
                         "Section {1} in configuration file {2} is invalid: "
                         "using defaults")) %
-                    key % _filePath);
+                        key % _filePath);
                 current.remove(key);
             }
         }
@@ -252,23 +272,24 @@ YAML::Node CenisysConfigSection::correctParent(const ConfigSection::Path &path)
     return current;
 }
 
-template <typename T>
-T CenisysConfigSection::getValue(const ConfigSection::Path &path,
-                                 const T &defaultValue)
+template <typename T, typename Wrapper>
+T ConfigSection::getValue(const ConfigSection::Path &path,
+                          const T &defaultValue)
 {
     std::lock_guard<std::mutex> lock(_lock);
     YAML::Node parent = correctParent(path.up());
     std::string key = path.getItems().back();
-    T result;
+    Wrapper result;
     if(parent[key] && !parent.IsNull() &&
        (!parent[key].IsScalar() ||
         !boost::conversion::try_lexical_convert(parent[key].Scalar(), result)))
     {
         parent.remove(key);
-        _server.log(boost::locale::format(boost::locale::translate(
+        _server.log(Server::LogLevel::Warning,
+                    boost::locale::format(boost::locale::translate(
                         "Item {1} in configuration file {2} is "
                         "invalid: using defaults")) %
-                    key % _filePath);
+                        key % _filePath);
     }
     if(!parent[key] || parent.IsNull())
     {
@@ -278,9 +299,9 @@ T CenisysConfigSection::getValue(const ConfigSection::Path &path,
     return result;
 }
 
-template <typename T>
-std::vector<T> CenisysConfigSection::getList(const ConfigSection::Path &path,
-                                             const std::vector<T> &defaultValue)
+template <typename T, typename Wrapper>
+std::vector<T> ConfigSection::getList(const ConfigSection::Path &path,
+                                      const std::vector<T> &defaultValue)
 {
     std::lock_guard<std::mutex> lock(_lock);
     YAML::Node parent = correctParent(path.up());
@@ -293,7 +314,7 @@ std::vector<T> CenisysConfigSection::getList(const ConfigSection::Path &path,
             {
                 if(!scalar.IsScalar())
                     return false;
-                T value;
+                Wrapper value;
                 if(!boost::conversion::try_lexical_convert(scalar.Scalar(),
                                                            value))
                     return false;
@@ -303,10 +324,11 @@ std::vector<T> CenisysConfigSection::getList(const ConfigSection::Path &path,
         }(parent[key])))
     {
         parent.remove(key);
-        _server.log(boost::locale::format(boost::locale::translate(
+        _server.log(Server::LogLevel::Warning,
+                    boost::locale::format(boost::locale::translate(
                         "Item {1} in configuration file {2} is "
                         "invalid: using defaults")) %
-                    key % _filePath);
+                        key % _filePath);
     }
     if(!parent[key] || parent.IsNull())
     {
@@ -317,8 +339,7 @@ std::vector<T> CenisysConfigSection::getList(const ConfigSection::Path &path,
 }
 
 template <typename T>
-void CenisysConfigSection::setValue(const ConfigSection::Path &path,
-                                    const T &value)
+void ConfigSection::setValue(const ConfigSection::Path &path, const T &value)
 {
     std::lock_guard<std::mutex> lock(_lock);
     YAML::Node parent = correctParent(path.up());
@@ -326,17 +347,18 @@ void CenisysConfigSection::setValue(const ConfigSection::Path &path,
     if(parent[key] && !parent.IsNull() && !parent[key].IsScalar())
     {
         parent.remove(key);
-        _server.log(boost::locale::format(boost::locale::translate(
+        _server.log(Server::LogLevel::Warning,
+                    boost::locale::format(boost::locale::translate(
                         "Changing type of item {1} in "
                         "configuration file {2} to scalar")) %
-                    key % _filePath);
+                        key % _filePath);
     }
     parent[key] = value;
 }
 
 template <typename T>
-void CenisysConfigSection::setList(const ConfigSection::Path &path,
-                                   const std::vector<T> &value)
+void ConfigSection::setList(const ConfigSection::Path &path,
+                            const std::vector<T> &value)
 {
     std::lock_guard<std::mutex> lock(_lock);
     YAML::Node parent = correctParent(path.up());
@@ -354,10 +376,11 @@ void CenisysConfigSection::setList(const ConfigSection::Path &path,
         }(parent[key])))
     {
         parent.remove(key);
-        _server.log(boost::locale::format(boost::locale::translate(
+        _server.log(Server::LogLevel::Warning,
+                    boost::locale::format(boost::locale::translate(
                         "Changing type of item {1} in "
                         "configuration file {2} to sequence")) %
-                    key % _filePath);
+                        key % _filePath);
     }
     parent[key] = value;
 }

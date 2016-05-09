@@ -1,5 +1,5 @@
 /*
- * Interface of the server.
+ * Implementation of the main server.
  * Copyright (C) 2016 iTX Technologies
  *
  * This file is part of Cenisys.
@@ -20,101 +20,192 @@
 #ifndef CENISYS_SERVER_H
 #define CENISYS_SERVER_H
 
-#include <functional>
+#include <condition_variable>
 #include <forward_list>
+#include <future>
 #include <locale>
-#include <string>
-#include <tuple>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <thread>
+#include <vector>
+#include <boost/asio/io_service.hpp>
+#include <boost/asio/signal_set.hpp>
+#include <boost/asio/coroutine.hpp>
+#include <boost/filesystem/path.hpp>
 #include <boost/locale/format.hpp>
+#include <boost/locale/date_time.hpp>
+#include <boost/locale/generator.hpp>
 #include <boost/locale/message.hpp>
+#include <boost/scope_exit.hpp>
+#include "server/configmanager.h"
+#include "server/console.h"
+#include "util/textcolor.h"
 
 namespace cenisys
 {
 
 class ConfigSection;
+class DefaultCommandHandlers;
+class CommandSender;
 
-//!
-//! \brief The interface for the server.
-//!
 class Server
 {
 public:
-    using CommandHandler = std::function<bool(const std::string &)>;
-    using CommandHandlerList = std::forward_list<CommandHandler>;
+    enum class LogLevel
+    {
+        Severe,
+        Warning,
+        Info,
+        Debug,
+    };
+
+    using CommandHandler =
+        std::function<void(CommandSender &, const std::string &)>;
+    using CommandHandlerList =
+        std::map<std::string,
+                 std::tuple<boost::locale::message, CommandHandler>>;
     using RegisteredCommandHandler = CommandHandlerList::const_iterator;
 
-    using LogFormat = std::function<void(const boost::locale::format &)>;
-    using LogMessage = std::function<void(const boost::locale::message &)>;
-    using LoggerBackend = std::tuple<LogFormat, LogMessage>;
-    using LoggerBackendList = std::forward_list<LoggerBackend>;
-    using RegisteredLoggerBackend = LoggerBackendList::const_iterator;
+    using ConsoleList = std::forward_list<Console>;
+    using RegisteredConsole = ConsoleList::const_iterator;
 
-    virtual ~Server() = default;
-
-    //!
-    //! \brief Start running the server.
-    //! \return Zero if stopped by user, non-zero if any error crashed the
-    //! server.
-    //!
-    virtual int run() = 0;
+    Server(const boost::filesystem::path &dataDir,
+           boost::locale::generator &localeGen);
+    ~Server();
 
     //!
-    //! \brief Stop the server. May called from any thread.
+    //! \brief Run the server. Blocks until termination.
+    //! \return 0 if successfully terminated.
     //!
-    virtual void terminate() = 0;
+    int run();
+    template <typename Executor>
+    void terminate(Executor &e)
+    {
+        _ioService.post([this]
+                        {
+                            stop();
+                        });
+    }
+    //!
+    //! \brief Terminate the server.
+    //!
+    void terminate() { terminate(_ioService); }
 
-    virtual void processEvent(std::function<void()> &&func) = 0;
+    template <typename Executor, typename Fn>
+    void processEvent(Executor &executor, Fn &&func)
+    {
+        std::promise<void> promise;
+        std::future<void> future = promise.get_future();
+        // HACK: asio cannot dispatch move-only handlers
+        executor.dispatch([ this, func = std::forward<Fn>(func), &promise ]
+                          {
+                              BOOST_SCOPE_EXIT_ALL(&) { promise.set_value(); };
+                              if(!lockTask())
+                                  return;
+                              BOOST_SCOPE_EXIT_ALL(&) { unlockTask(); };
+                              func();
+                          });
+        future.get();
+    }
 
-    virtual std::locale getLocale(std::string locale) = 0;
+    template <typename Fn>
+    void processEvent(Fn &&func)
+    {
+        processEvent(_ioService, std::forward<Fn>(func));
+    }
 
-    //!
-    //! \brief Process a command.
-    //! \param command The command and arguments, without the leading slash.
-    //! \return true on success, false if command does not exist.
-    //!
-    virtual bool dispatchCommand(std::string command) = 0;
+    std::locale getLocale(std::string locale);
+    bool dispatchCommand(CommandSender &sender, const std::string &command);
 
-    //!
-    //! \brief Register a command.
-    //! \param handler The function which processes the command.
-    //! \return A handle to unregister the command.
-    //!
-    virtual RegisteredCommandHandler
-    registerCommand(CommandHandler handler) = 0;
+    RegisteredCommandHandler registerCommand(const std::string &command,
+                                             const boost::locale::message &help,
+                                             CommandHandler &&handler);
+    void unregisterCommand(RegisteredCommandHandler handle);
 
-    //!
-    //! \brief Unregister the command.
-    //! \param handle The return value of registerCommand.
-    //!
-    virtual void unregisterCommand(RegisteredCommandHandler handle) = 0;
+    RegisteredConsole registerConsole(ConsoleBackend &backend);
+    void unregisterConsole(RegisteredConsole handle);
 
-    //!
-    //! \brief Log formatted text to the server log.
-    //! \param content The content in string. May contain color codes.
-    //!
-    virtual void log(const boost::locale::format &content) = 0;
+    template <typename T>
+    void log(LogLevel level, const T &content)
+    {
+        TextFormat color;
+        boost::locale::message levelText;
+        switch(level)
+        {
+        case LogLevel::Severe:
+            color = TextFormat::Red;
+            levelText = boost::locale::translate("SEVERE");
+            break;
+        case LogLevel::Warning:
+            color = TextFormat::Yellow;
+            levelText = boost::locale::translate("WARNING");
+            break;
+        case LogLevel::Info:
+            color = TextFormat::Gray;
+            levelText = boost::locale::translate("INFO");
+            break;
+        case LogLevel::Debug:
+            color = TextFormat::DarkCyan;
+            levelText = boost::locale::translate("DEBUG");
+            break;
+        }
+        boost::locale::format message(
+            boost::locale::translate("{1}[{2}] [{3}] {4}{5}"));
+        boost::locale::date_time time;
+        message % color % time % levelText % content % TextFormat::Reset;
+        std::lock_guard<std::mutex> lock(_consoleListLock);
+        for(auto &console : _consoles)
+            console.log(message);
+    }
 
-    //!
-    //! \brief Log translated text to the server log.
-    //! \param content The content in string.
-    //!
-    virtual void log(const boost::locale::message &content) = 0;
+    std::shared_ptr<ConfigSection> getConfig(const std::string &name);
 
-    //!
-    //! \brief Register a logger backend.
-    //! \param backend The function to call to log. Must not block.
-    //! \return A handle to the registered backend.
-    //!
-    virtual RegisteredLoggerBackend registerBackend(LoggerBackend backend) = 0;
+private:
+    bool lockTask();
+    void unlockTask();
+    enum class LockType : bool
+    {
+        Start = true,
+        Stop = false
+    };
+    template <LockType type>
+    bool lockCritical();
+    void unlockCritical();
 
-    //!
-    //! \brief Unregister the logger backend.
-    //! \param handle The handle returned by registerBackend.
-    //!
-    virtual void unregisterBackend(RegisteredLoggerBackend handle) = 0;
+    template <typename Handler, typename... Fn>
+    void asyncRunCritical(Handler &&handler, Fn &&... func);
 
-    virtual std::shared_ptr<ConfigSection>
-    getConfig(const std::string &name) = 0;
+    void start(boost::asio::coroutine coroutine = {});
+    void stop(boost::asio::coroutine coroutine = {});
+
+    std::mutex _stateLock;
+    std::condition_variable _stateWait;
+    int _counter;
+    bool _dropEvents;
+
+    boost::filesystem::path _dataDir;
+
+    boost::locale::generator &_localeGen;
+
+    boost::asio::io_service _ioService;
+    std::unique_ptr<boost::asio::io_service::work> _work;
+    std::vector<std::thread> _threads;
+    boost::asio::signal_set _termSignals;
+
+    CommandHandlerList _commandList;
+    std::mutex _commandListLock;
+
+    ConfigManager _configManager;
+    std::shared_ptr<ConfigSection> _config;
+
+    RegisteredCommandHandler _helpCommand;
+    std::unique_ptr<DefaultCommandHandlers> _defaultCommands;
+
+    ConsoleList _consoles;
+    std::mutex _consoleListLock;
+    std::shared_ptr<ConsoleBackend> _terminalConsole;
+    RegisteredConsole _terminalConsoleHandle;
 };
 
 } // namespace cenisys

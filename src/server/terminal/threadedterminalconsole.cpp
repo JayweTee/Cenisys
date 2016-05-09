@@ -19,39 +19,45 @@
  */
 #include <iostream>
 #include <boost/locale/format.hpp>
-#include <boost/locale/message.hpp>
 #include "server/server.h"
-#include "threadedterminalconsole.h"
+#include "server/terminal/terminalcolor.h"
+#include "server/terminal/threadedterminalconsole.h"
 
 namespace cenisys
 {
 
-ThreadedTerminalConsole::ThreadedTerminalConsole(Server &server)
-    : _server(server)
+ThreadedTerminalConsole::ThreadedTerminalConsole(bool enableColor)
+    : _enableColor(enableColor)
 {
-    _running = true;
-    _readThread = std::thread(&ThreadedTerminalConsole::readWorker, this);
-    _writeThread = std::thread(&ThreadedTerminalConsole::writeWorker, this);
-    _loggerBackendHandle = _server.registerBackend(std::make_tuple(
-        std::bind(&ThreadedTerminalConsole::log<boost::locale::format>, this,
-                  std::placeholders::_1),
-        std::bind(&ThreadedTerminalConsole::log<boost::locale::message>, this,
-                  std::placeholders::_1)));
 }
 
 ThreadedTerminalConsole::~ThreadedTerminalConsole()
 {
-    _server.unregisterBackend(_loggerBackendHandle);
+}
+
+void ThreadedTerminalConsole::attach(Console &console)
+{
+    _console = &console;
+    _running = true;
+    _readThread = std::thread(&ThreadedTerminalConsole::readWorker, this);
+    _writeThread = std::thread(&ThreadedTerminalConsole::writeWorker, this);
+}
+
+void ThreadedTerminalConsole::detach()
+{
     std::unique_lock<std::mutex> lock(_writeQueueLock);
     _running = false;
     lock.unlock();
+    _writeQueueNotifier.notify_all();
+    _writeThread.join();
     if(std::cin)
+    {
         std::cerr << boost::locale::translate("Please press Enter to continue…")
                          .str()
                   << std::endl;
+    }
     _readThread.join();
-    _writeQueueNotifier.notify_all();
-    _writeThread.join();
+    _console = nullptr;
 }
 
 void ThreadedTerminalConsole::readWorker()
@@ -61,11 +67,15 @@ void ThreadedTerminalConsole::readWorker()
         std::string buf;
         std::getline(std::cin, buf);
         if(!buf.empty())
-            _server.processEvent(
-                std::bind(&Server::dispatchCommand, &_server, buf));
+            _console->getServer().processEvent(
+                [ this, buf = std::move(buf) ]
+                {
+                    _console->getServer().dispatchCommand(*_console,
+                                                          std::move(buf));
+                });
         if(!std::cin)
         {
-            _server.terminate();
+            _console->getServer().terminate();
             break;
         }
     }
@@ -73,29 +83,31 @@ void ThreadedTerminalConsole::readWorker()
 
 void ThreadedTerminalConsole::writeWorker()
 {
+    std::unique_lock<std::mutex> lock(_writeQueueLock);
     while(_running || !_writeQueue.empty())
     {
-        std::unique_lock<std::mutex> lock(_writeQueueLock);
-        if(_running && _writeQueue.empty())
-            _writeQueueNotifier.wait(lock);
+        _writeQueueNotifier.wait(lock, [this]() -> bool
+                                 {
+                                     return !_running || !_writeQueue.empty();
+                                 });
         std::string buf;
         // Ensure everything is written
         while(!_writeQueue.empty())
         {
-            buf += _writeQueue.front();
-            buf += '\n';
+            buf += std::move(_writeQueue.front()) + '\n';
             _writeQueue.pop();
         }
         lock.unlock();
         std::cout << buf << std::flush;
+        lock.lock();
     }
 }
 
-template <typename T>
-void ThreadedTerminalConsole::log(const T &content)
+void ThreadedTerminalConsole::log(const boost::locale::format &content)
 {
     std::unique_lock<std::mutex> lock(_writeQueueLock);
-    _writeQueue.push(content.str());
+    _writeQueue.push(_enableColor ? ansiColorize(content.str())
+                                  : stripColor(content.str()));
     lock.unlock();
     _writeQueueNotifier.notify_one();
 }

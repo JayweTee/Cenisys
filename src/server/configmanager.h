@@ -1,5 +1,5 @@
 /*
- * ThreadedTerminalConsole
+ * ConfigManager
  * Copyright (C) 2016 iTX Technologies
  *
  * This file is part of Cenisys.
@@ -17,47 +17,33 @@
  * You should have received a copy of the GNU General Public License
  * along with Cenisys.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef CENISYS_THREADEDTERMINALCONSOLE_H
-#define CENISYS_THREADEDTERMINALCONSOLE_H
+#ifndef CENISYS_CONFIGMANAGER_H
+#define CENISYS_CONFIGMANAGER_H
 
-#include <atomic>
-#include <condition_variable>
-#include <locale>
-#include <mutex>
-#include <queue>
-#include <thread>
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <boost/filesystem/path.hpp>
 
 namespace cenisys
 {
 
 class Server;
+class ConfigSection;
 
-class ThreadedTerminalConsole
+class ConfigManager
 {
 public:
-    ThreadedTerminalConsole(Server &server);
-    ~ThreadedTerminalConsole();
+    ConfigManager(Server &server, const boost::filesystem::path &basepath);
+    ~ConfigManager();
+    std::shared_ptr<ConfigSection> getConfig(const std::string &name);
 
 private:
-    void readWorker();
-
-    void writeWorker();
-    template <typename T>
-    void log(const T &content);
-
     Server &_server;
-    std::atomic_bool _running;
-
-    std::thread _readThread;
-
-    std::thread _writeThread;
-    std::locale _locale;
-    Server::RegisteredLoggerBackend _loggerBackendHandle;
-    std::queue<std::string> _writeQueue;
-    std::mutex _writeQueueLock;
-    std::condition_variable _writeQueueNotifier;
+    boost::filesystem::path _basepath;
+    std::unordered_map<std::string, std::weak_ptr<ConfigSection>> _loadedConfig;
 };
 
 } // namespace cenisys
 
-#endif // CENISYS_THREADEDTERMINALCONSOLE_H
+#endif // CENISYS_CONFIGMANAGER_H

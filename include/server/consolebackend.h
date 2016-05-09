@@ -1,5 +1,5 @@
 /*
- * DefaultCommandHandlers
+ * ConsoleBackend
  * Copyright (C) 2016 iTX Technologies
  *
  * This file is part of Cenisys.
@@ -17,27 +17,34 @@
  * You should have received a copy of the GNU General Public License
  * along with Cenisys.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef CENISYS_DEFAULTCOMMANDHANDLERS_H
-#define CENISYS_DEFAULTCOMMANDHANDLERS_H
+#ifndef CENISYS_CONSOLEBACKEND_H
+#define CENISYS_CONSOLEBACKEND_H
 
-#include <functional>
-#include <unordered_map>
-#include "server/server.h"
+#include "command/commandsender.h"
 
 namespace cenisys
 {
 
-class DefaultCommandHandlers
+class Console;
+
+class ConsoleBackend
 {
 public:
-    DefaultCommandHandlers(Server &server);
-    ~DefaultCommandHandlers();
+    virtual ~ConsoleBackend() = default;
 
-private:
-    Server &_server;
-    std::vector<Server::RegisteredCommandHandler> _handles;
+    //!
+    //! \brief Attach to a console object.
+    //! \param console The container object.
+    //!
+    virtual void attach(Console &console) = 0;
+    //!
+    //! \brief Detach from a console object. It will not be used after the call.
+    //!
+    virtual void detach() = 0;
+
+    virtual void log(const boost::locale::format &content) = 0;
 };
 
 } // namespace cenisys
 
-#endif // CENISYS_DEFAULTCOMMANDHANDLERS_H
+#endif // CENISYS_CONSOLEBACKEND_H

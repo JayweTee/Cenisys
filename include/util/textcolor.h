@@ -1,5 +1,5 @@
 /*
- * CenisysConfigManager
+ * Definition of text colors.
  * Copyright (C) 2016 iTX Technologies
  *
  * This file is part of Cenisys.
@@ -17,34 +17,47 @@
  * You should have received a copy of the GNU General Public License
  * along with Cenisys.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef CENISYS_CENISYSCONFIGMANAGER_H
-#define CENISYS_CENISYSCONFIGMANAGER_H
+#ifndef CENISYS_TEXTCOLOR_H
+#define CENISYS_TEXTCOLOR_H
 
-#include <memory>
-#include <string>
-#include <unordered_map>
-#include <boost/filesystem/path.hpp>
+#include <ostream>
 
 namespace cenisys
 {
 
-class Server;
-class ConfigSection;
+constexpr auto SECTION_MARK = "§";
 
-class CenisysConfigManager
+enum class TextFormat : char
 {
-public:
-    CenisysConfigManager(Server &server,
-                         const boost::filesystem::path &basepath);
-    ~CenisysConfigManager();
-    std::shared_ptr<ConfigSection> getConfig(const std::string &name);
-
-private:
-    Server &_server;
-    boost::filesystem::path _basepath;
-    std::unordered_map<std::string, std::weak_ptr<ConfigSection>> _loadedConfig;
+    Black = '0',
+    DarkBlue,
+    DarkGreen,
+    DarkCyan,
+    DarkRed,
+    Purple,
+    Gold,
+    Gray,
+    DarkGray,
+    Blue,
+    BrightGreen,
+    Cyan,
+    Red,
+    Pink,
+    Yellow,
+    White,
+    Random = 'k',
+    Bold,
+    Strikethrough,
+    Underlined,
+    Italic,
+    Reset = 'r',
 };
 
+inline std::ostream &operator<<(std::ostream &output, TextFormat code)
+{
+    output << SECTION_MARK << static_cast<char>(code);
+    return output;
+}
 } // namespace cenisys
 
-#endif // CENISYS_CENISYSCONFIGMANAGER_H
+#endif // CENISYS_TEXTCOLOR_H

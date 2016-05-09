@@ -1,5 +1,5 @@
 /*
- * DefaultCommandHandlers
+ * Helpers for terminal colors.
  * Copyright (C) 2016 iTX Technologies
  *
  * This file is part of Cenisys.
@@ -17,27 +17,17 @@
  * You should have received a copy of the GNU General Public License
  * along with Cenisys.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef CENISYS_DEFAULTCOMMANDHANDLERS_H
-#define CENISYS_DEFAULTCOMMANDHANDLERS_H
+#ifndef CENISYS_TERMINALCOLOR_H
+#define CENISYS_TERMINALCOLOR_H
 
-#include <functional>
-#include <unordered_map>
-#include "server/server.h"
+#include <string>
 
 namespace cenisys
 {
 
-class DefaultCommandHandlers
-{
-public:
-    DefaultCommandHandlers(Server &server);
-    ~DefaultCommandHandlers();
-
-private:
-    Server &_server;
-    std::vector<Server::RegisteredCommandHandler> _handles;
-};
+std::string ansiColorize(const std::string &str);
+std::string stripColor(const std::string &str);
 
 } // namespace cenisys
 
-#endif // CENISYS_DEFAULTCOMMANDHANDLERS_H
+#endif // CENISYS_TERMINALCOLOR_H

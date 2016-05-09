@@ -24,12 +24,12 @@
 #include <memory>
 #include <vector>
 #include <boost/filesystem/path.hpp>
-#include <boost/locale/formatting.hpp>
+#include <boost/locale/format.hpp>
 #include <boost/locale/generator.hpp>
 #include <boost/locale/message.hpp>
 #include <boost/program_options.hpp>
 #include "config.h"
-#include "server/cenisysserver.h"
+#include "server/server.h"
 
 int main(int argc, char *argv[])
 {
@@ -82,7 +82,7 @@ int main(int argc, char *argv[])
     }
 
     std::unique_ptr<cenisys::Server> server =
-        std::make_unique<cenisys::CenisysServer>(dataDir[0], localeGen);
+        std::make_unique<cenisys::Server>(dataDir[0], localeGen);
     int ret = server->run();
     std::locale::global(oldLoc);
     return ret;
