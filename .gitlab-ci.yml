@@ -14,8 +14,7 @@ translation_download:
   stage: prepare
   script:
    - zanata-cli -B pull --create-skeletons
-   - find . -name "*.h" -o "*.cpp" | xgettext --from-code=UTF-8 -ktranslate:1,1t -ktranslate:1,2,3t -C --boost -f- -o po/cenisys.pot --copyright-holder="iTX 
-Technologies" --package-name=Cenisys
+   - find . -name "*.h" -o "*.cpp" | xgettext --from-code=UTF-8 -ktranslate:1,1t -ktranslate:1,2,3t -C --boost -f- -o po/cenisys.pot --copyright-holder="iTX Technologies" --package-name=Cenisys
   cache:
     untracked: true
   artifacts:
