@@ -43,6 +43,7 @@ std::shared_ptr<ConfigSection> ConfigManager::getConfig(const std::string &name)
 {
     boost::filesystem::path target =
         (_basepath / name).replace_extension("yml");
+    std::lock_guard<std::mutex> lock(_loadedConfigLock);
     std::shared_ptr<ConfigSection> result = _loadedConfig[name].lock();
     if(!result)
     {

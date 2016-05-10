@@ -21,6 +21,7 @@
 #define CENISYS_CONFIGMANAGER_H
 
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <boost/filesystem/path.hpp>
@@ -42,6 +43,7 @@ private:
     Server &_server;
     boost::filesystem::path _basepath;
     std::unordered_map<std::string, std::weak_ptr<ConfigSection>> _loadedConfig;
+    std::mutex _loadedConfigLock;
 };
 
 } // namespace cenisys
