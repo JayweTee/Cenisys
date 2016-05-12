@@ -18,9 +18,9 @@
  * along with Cenisys.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <cstring>
-#include "util/textcolor.h"
 #include "server/terminal/terminalcolor.h"
+#include "util/textcolor.h"
+#include <cstring>
 
 namespace cenisys
 {

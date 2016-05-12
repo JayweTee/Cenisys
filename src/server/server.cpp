@@ -21,19 +21,19 @@
 #if defined(UNIX)
 #include <unistd.h>
 #endif
-#include <functional>
-#include <mutex>
-#include <iostream>
-#include <locale>
+#include "command/commandsender.h"
+#include "command/defaultcommandhandlers.h"
+#include "config/configsection.h"
+#include "server/server.h"
+#include "server/terminal/posixasyncterminalconsole.h"
+#include "server/terminal/threadedterminalconsole.h"
 #include <boost/locale/format.hpp>
 #include <boost/locale/generator.hpp>
 #include <boost/locale/message.hpp>
-#include "config/configsection.h"
-#include "command/commandsender.h"
-#include "command/defaultcommandhandlers.h"
-#include "server/terminal/threadedterminalconsole.h"
-#include "server/terminal/posixasyncterminalconsole.h"
-#include "server/server.h"
+#include <functional>
+#include <iostream>
+#include <locale>
+#include <mutex>
 
 namespace cenisys
 {
@@ -52,10 +52,7 @@ Server::~Server()
 
 int Server::run()
 {
-    _ioService.post([this]
-                    {
-                        start();
-                    });
+    _ioService.post([this] { start(); });
     _ioService.run();
     // TODO: Currently there's no way to terminate threads in io_service.
     for(auto &item : _threads)
@@ -93,8 +90,8 @@ Server::registerCommand(const std::string &command,
 {
     std::lock_guard<std::mutex> lock(_commandListLock);
     // TODO: C++17 non-explicit tuples
-    return _commandList.insert(
-                           {command, std::make_tuple(help, std::move(handler))})
+    return _commandList
+        .insert({command, std::make_tuple(help, std::move(handler))})
         .first;
 }
 
@@ -213,11 +210,9 @@ void Server::asyncRunCritical(Handler &&handler, Fn &&... func)
     }
     // TODO: C++17 fold expressions
     // HACK: GCC bug
-    auto lambda = [this, handler](auto &&func)
-    {
+    auto lambda = [this, handler](auto &&func) {
         _ioService.post(
-            [ this, func = std::forward<decltype(func)>(func), handler ]
-            {
+            [ this, func = std::forward<decltype(func)>(func), handler ] {
                 BOOST_SCOPE_EXIT_ALL(&)
                 {
                     std::unique_lock<std::mutex> lock(_stateLock);
@@ -308,29 +303,20 @@ void Server::start(boost::asio::coroutine coroutine)
                                     threads);
             for(unsigned int i = 1; i < threads; i++)
             {
-                _threads.emplace_back([this]
-                                      {
-                                          _ioService.run();
-                                      });
+                _threads.emplace_back([this] { _ioService.run(); });
             }
         }
 
         BOOST_ASIO_CORO_YIELD asyncRunCritical(
-            [this, coroutine]
-            {
-                start(coroutine);
-            },
-            [this]
-            {
+            [this, coroutine] { start(coroutine); },
+            [this] {
                 _work =
                     std::make_unique<boost::asio::io_service::work>(_ioService);
             },
-            [this]
-            {
+            [this] {
                 _helpCommand = registerCommand(
                     "help", boost::locale::translate("Display this help"),
-                    [this](CommandSender &sender, const std::string &command)
-                    {
+                    [this](CommandSender &sender, const std::string &command) {
                         sender.sendMessage(
                             boost::locale::translate("List of commands:"));
                         // TODO: Paging and more
@@ -343,15 +329,13 @@ void Server::start(boost::asio::coroutine coroutine)
                         }
                     });
             },
-            [this]
-            {
+            [this] {
                 _defaultCommands =
                     std::make_unique<DefaultCommandHandlers>(*this);
             });
 
         _termSignals.async_wait(
-            [this](const boost::system::error_code &ec, int signal)
-            {
+            [this](const boost::system::error_code &ec, int signal) {
                 if(ec == boost::asio::error::operation_aborted)
                     return;
                 terminate();
@@ -375,22 +359,10 @@ void Server::stop(boost::asio::coroutine coroutine)
         _termSignals.cancel();
 
         BOOST_ASIO_CORO_YIELD asyncRunCritical(
-            [this, coroutine]
-            {
-                stop(coroutine);
-            },
-            [this]
-            {
-                _defaultCommands.reset();
-            },
-            [this]
-            {
-                unregisterCommand(_helpCommand);
-            },
-            [this]
-            {
-                _work.reset();
-            });
+            [this, coroutine] { stop(coroutine); },
+            [this] { _defaultCommands.reset(); },
+            [this] { unregisterCommand(_helpCommand); },
+            [this] { _work.reset(); });
 
         log(LogLevel::Info,
             boost::locale::translate("Server successfully terminated."));

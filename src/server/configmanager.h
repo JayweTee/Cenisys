@@ -20,11 +20,11 @@
 #ifndef CENISYS_CONFIGMANAGER_H
 #define CENISYS_CONFIGMANAGER_H
 
+#include <boost/filesystem/path.hpp>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <unordered_map>
-#include <boost/filesystem/path.hpp>
 
 namespace cenisys
 {

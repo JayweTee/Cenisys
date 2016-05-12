@@ -20,9 +20,9 @@
 #ifndef CENISYS_CONSOLE_H
 #define CENISYS_CONSOLE_H
 
-#include <memory>
 #include "command/commandsender.h"
 #include "server/consolebackend.h"
+#include <memory>
 
 namespace cenisys
 {

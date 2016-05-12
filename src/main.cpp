@@ -18,18 +18,18 @@
  * along with Cenisys.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <iostream>
-#include <locale>
-#include <string>
-#include <memory>
-#include <vector>
+#include "config.h"
+#include "server/server.h"
 #include <boost/filesystem/path.hpp>
 #include <boost/locale/format.hpp>
 #include <boost/locale/generator.hpp>
 #include <boost/locale/message.hpp>
 #include <boost/program_options.hpp>
-#include "config.h"
-#include "server/server.h"
+#include <iostream>
+#include <locale>
+#include <memory>
+#include <string>
+#include <vector>
 
 int main(int argc, char *argv[])
 {

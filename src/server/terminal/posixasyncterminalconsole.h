@@ -23,14 +23,14 @@
 #include "config.h"
 #if defined(UNIX)
 
-#include <memory>
+#include "config.h"
+#include "server/consolebackend.h"
+#include "server/server.h"
 #include <boost/asio/io_service.hpp>
+#include <boost/asio/posix/stream_descriptor.hpp>
 #include <boost/asio/strand.hpp>
 #include <boost/asio/streambuf.hpp>
-#include <boost/asio/posix/stream_descriptor.hpp>
-#include "config.h"
-#include "server/server.h"
-#include "server/consolebackend.h"
+#include <memory>
 
 namespace cenisys
 {

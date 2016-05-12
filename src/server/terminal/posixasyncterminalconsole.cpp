@@ -20,12 +20,12 @@
 #include "config.h"
 #if defined(UNIX)
 
-#include <unistd.h>
-#include <future>
+#include "server/terminal/posixasyncterminalconsole.h"
+#include "server/terminal/terminalcolor.h"
 #include <boost/asio/read_until.hpp>
 #include <boost/asio/write.hpp>
-#include "server/terminal/terminalcolor.h"
-#include "server/terminal/posixasyncterminalconsole.h"
+#include <future>
+#include <unistd.h>
 
 namespace cenisys
 {
@@ -66,8 +66,7 @@ void PosixAsyncTerminalConsole::log(const boost::locale::format &content)
                                         : stripColor(content.str())) +
                           '\n';
     _writeStrand.dispatch(
-        [ this, self(shared_from_this()), message = std::move(message) ]
-        {
+        [ this, self(shared_from_this()), message = std::move(message) ] {
             bool flag = _writeBuffer.size() == 0;
             _writeBuffer.commit(
                 boost::asio::buffer_copy(_writeBuffer.prepare(message.size()),
@@ -79,58 +78,49 @@ void PosixAsyncTerminalConsole::log(const boost::locale::format &content)
 
 void PosixAsyncTerminalConsole::asyncRead()
 {
-    boost::asio::async_read_until(
-        _stdin, _readBuffer, '\n',
-        [ this, self(shared_from_this()) ](const boost::system::error_code &ec,
-                                           std::size_t bytes_transferred)
+    boost::asio::async_read_until(_stdin, _readBuffer, '\n', [
+        this, self(shared_from_this())
+    ](const boost::system::error_code &ec, std::size_t bytes_transferred) {
+        if(ec == boost::asio::error::operation_aborted)
+            return;
+        if(ec == boost::asio::error::eof)
         {
-            if(ec == boost::asio::error::operation_aborted)
-                return;
-            if(ec == boost::asio::error::eof)
-            {
-                std::lock_guard<std::mutex> lock(_consoleLock);
-                if(_console)
-                {
-                    _console->getServer().processEvent(
-                        [&]
-                        {
-                            _console->getServer().terminate();
-                        });
-                }
-                return;
-            }
-
-            std::string buf(
-                boost::asio::buffer_cast<const char *>(_readBuffer.data()),
-                bytes_transferred - 1);
-            _readBuffer.consume(bytes_transferred);
             std::lock_guard<std::mutex> lock(_consoleLock);
             if(_console)
             {
-                if(!buf.empty())
-                {
-                    _console->getServer().processEvent(
-                        [&]
-                        {
-                            _console->getServer().dispatchCommand(
-                                *_console, std::move(buf));
-                        });
-                }
-                asyncRead();
+                _console->getServer().processEvent(
+                    [&] { _console->getServer().terminate(); });
             }
-        });
+            return;
+        }
+
+        std::string buf(
+            boost::asio::buffer_cast<const char *>(_readBuffer.data()),
+            bytes_transferred - 1);
+        _readBuffer.consume(bytes_transferred);
+        std::lock_guard<std::mutex> lock(_consoleLock);
+        if(_console)
+        {
+            if(!buf.empty())
+            {
+                _console->getServer().processEvent([&] {
+                    _console->getServer().dispatchCommand(*_console,
+                                                          std::move(buf));
+                });
+            }
+            asyncRead();
+        }
+    });
 }
 
 void PosixAsyncTerminalConsole::asyncWrite()
 {
-    boost::asio::async_write(
-        _stdout, _writeBuffer,
-        _writeStrand.wrap([ this, self(shared_from_this()) ](
-            const boost::system::error_code &ec, std::size_t bytes_transferred)
-                          {
-                              if(_writeBuffer.size() > 0)
-                                  asyncWrite();
-                          }));
+    boost::asio::async_write(_stdout, _writeBuffer, _writeStrand.wrap([
+        this, self(shared_from_this())
+    ](const boost::system::error_code &ec, std::size_t bytes_transferred) {
+        if(_writeBuffer.size() > 0)
+            asyncWrite();
+    }));
 }
 
 } // namespace cenisys

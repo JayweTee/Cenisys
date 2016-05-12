@@ -18,13 +18,13 @@
  * along with Cenisys.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <boost/filesystem/path.hpp>
+#include "server/configmanager.h"
+#include "config/configsection.h"
 #include <boost/filesystem/operations.hpp>
+#include <boost/filesystem/path.hpp>
 #include <boost/locale/format.hpp>
 #include <boost/locale/message.hpp>
 #include <yaml-cpp/parser.h>
-#include "config/configsection.h"
-#include "server/configmanager.h"
 
 namespace cenisys
 {

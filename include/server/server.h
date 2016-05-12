@@ -20,6 +20,18 @@
 #ifndef CENISYS_SERVER_H
 #define CENISYS_SERVER_H
 
+#include "server/configmanager.h"
+#include "server/console.h"
+#include "util/textcolor.h"
+#include <boost/asio/coroutine.hpp>
+#include <boost/asio/io_service.hpp>
+#include <boost/asio/signal_set.hpp>
+#include <boost/filesystem/path.hpp>
+#include <boost/locale/date_time.hpp>
+#include <boost/locale/format.hpp>
+#include <boost/locale/generator.hpp>
+#include <boost/locale/message.hpp>
+#include <boost/scope_exit.hpp>
 #include <condition_variable>
 #include <forward_list>
 #include <future>
@@ -29,18 +41,6 @@
 #include <mutex>
 #include <thread>
 #include <vector>
-#include <boost/asio/io_service.hpp>
-#include <boost/asio/signal_set.hpp>
-#include <boost/asio/coroutine.hpp>
-#include <boost/filesystem/path.hpp>
-#include <boost/locale/format.hpp>
-#include <boost/locale/date_time.hpp>
-#include <boost/locale/generator.hpp>
-#include <boost/locale/message.hpp>
-#include <boost/scope_exit.hpp>
-#include "server/configmanager.h"
-#include "server/console.h"
-#include "util/textcolor.h"
 
 namespace cenisys
 {
@@ -82,10 +82,7 @@ public:
     template <typename Executor>
     void terminate(Executor &e)
     {
-        _ioService.post([this]
-                        {
-                            stop();
-                        });
+        _ioService.post([this] { stop(); });
     }
     //!
     //! \brief Terminate the server.
@@ -98,14 +95,13 @@ public:
         std::promise<void> promise;
         std::future<void> future = promise.get_future();
         // HACK: asio cannot dispatch move-only handlers
-        executor.dispatch([ this, func = std::forward<Fn>(func), &promise ]
-                          {
-                              BOOST_SCOPE_EXIT_ALL(&) { promise.set_value(); };
-                              if(!lockTask())
-                                  return;
-                              BOOST_SCOPE_EXIT_ALL(&) { unlockTask(); };
-                              func();
-                          });
+        executor.dispatch([ this, func = std::forward<Fn>(func), &promise ] {
+            BOOST_SCOPE_EXIT_ALL(&) { promise.set_value(); };
+            if(!lockTask())
+                return;
+            BOOST_SCOPE_EXIT_ALL(&) { unlockTask(); };
+            func();
+        });
         future.get();
     }
 

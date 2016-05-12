@@ -20,8 +20,8 @@
 #ifndef CENISYS_CONFIGSECTION_H
 #define CENISYS_CONFIGSECTION_H
 
-#include <mutex>
 #include <boost/filesystem/path.hpp>
+#include <mutex>
 #include <yaml-cpp/node/node.h>
 
 namespace cenisys

@@ -20,9 +20,9 @@
 #ifndef CENISYS_DEFAULTCOMMANDHANDLERS_H
 #define CENISYS_DEFAULTCOMMANDHANDLERS_H
 
+#include "server/server.h"
 #include <functional>
 #include <unordered_map>
-#include "server/server.h"
 
 namespace cenisys
 {

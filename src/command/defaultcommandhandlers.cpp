@@ -18,9 +18,9 @@
  * along with Cenisys.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "config.h"
-#include "command/commandsender.h"
 #include "defaultcommandhandlers.h"
+#include "command/commandsender.h"
+#include "config.h"
 
 namespace cenisys
 {
@@ -29,14 +29,12 @@ DefaultCommandHandlers::DefaultCommandHandlers(Server &server) : _server(server)
 {
     _handles.push_back(_server.registerCommand(
         "stop", boost::locale::translate("Terminate the server"),
-        [this](CommandSender &sender, const std::string &command)
-        {
+        [this](CommandSender &sender, const std::string &command) {
             _server.terminate();
         }));
     _handles.push_back(_server.registerCommand(
         "version", boost::locale::translate("Show the server version"),
-        [this](CommandSender &sender, const std::string &command)
-        {
+        [this](CommandSender &sender, const std::string &command) {
             sender.sendMessage(
                 boost::locale::format(boost::locale::translate("Cenisys {1}")) %
                 SERVER_VERSION);

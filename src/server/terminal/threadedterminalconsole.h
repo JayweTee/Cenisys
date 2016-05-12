@@ -20,16 +20,16 @@
 #ifndef CENISYS_THREADEDTERMINALCONSOLE_H
 #define CENISYS_THREADEDTERMINALCONSOLE_H
 
+#include "server/consolebackend.h"
+#include "server/server.h"
 #include <atomic>
+#include <boost/asio/io_service.hpp>
+#include <boost/asio/strand.hpp>
 #include <condition_variable>
 #include <locale>
 #include <mutex>
 #include <queue>
 #include <thread>
-#include <boost/asio/io_service.hpp>
-#include <boost/asio/strand.hpp>
-#include "server/server.h"
-#include "server/consolebackend.h"
 
 namespace cenisys
 {

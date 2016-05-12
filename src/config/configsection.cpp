@@ -18,17 +18,17 @@
  * along with Cenisys.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <fstream>
-#include <mutex>
+#include "config/configsection.h"
+#include "server/server.h"
 #include <boost/filesystem/fstream.hpp>
 #include <boost/filesystem/operations.hpp>
 #include <boost/lexical_cast/try_lexical_convert.hpp>
 #include <boost/locale/format.hpp>
 #include <boost/locale/message.hpp>
 #include <boost/system/error_code.hpp>
+#include <fstream>
+#include <mutex>
 #include <yaml-cpp/yaml.h>
-#include "server/server.h"
-#include "config/configsection.h"
 
 namespace
 {
@@ -308,20 +308,19 @@ std::vector<T> ConfigSection::getList(const ConfigSection::Path &path,
     std::string key = path.getItems().back();
     std::vector<T> result;
     if(parent[key] && !parent.IsNull() &&
-       (!parent[key].IsSequence() || [&result](const YAML::Node &seq) -> bool
-        {
-            for(const YAML::Node &scalar : seq)
-            {
-                if(!scalar.IsScalar())
-                    return false;
-                Wrapper value;
-                if(!boost::conversion::try_lexical_convert(scalar.Scalar(),
-                                                           value))
-                    return false;
-                result.push_back(value);
-            }
-            return true;
-        }(parent[key])))
+       (!parent[key].IsSequence() || [&result](const YAML::Node &seq) -> bool {
+           for(const YAML::Node &scalar : seq)
+           {
+               if(!scalar.IsScalar())
+                   return false;
+               Wrapper value;
+               if(!boost::conversion::try_lexical_convert(scalar.Scalar(),
+                                                          value))
+                   return false;
+               result.push_back(value);
+           }
+           return true;
+       }(parent[key])))
     {
         parent.remove(key);
         _server.log(Server::LogLevel::Warning,
@@ -365,15 +364,14 @@ void ConfigSection::setList(const ConfigSection::Path &path,
     std::string key = path.getItems().back();
     std::vector<T> result;
     if(parent[key] && !parent.IsNull() &&
-       (!parent[key].IsSequence() || [&result](const YAML::Node &seq) -> bool
-        {
-            for(const YAML::Node &scalar : seq)
-            {
-                if(!scalar.IsScalar())
-                    return false;
-            }
-            return true;
-        }(parent[key])))
+       (!parent[key].IsSequence() || [&result](const YAML::Node &seq) -> bool {
+           for(const YAML::Node &scalar : seq)
+           {
+               if(!scalar.IsScalar())
+                   return false;
+           }
+           return true;
+       }(parent[key])))
     {
         parent.remove(key);
         _server.log(Server::LogLevel::Warning,

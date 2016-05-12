@@ -17,11 +17,11 @@
  * You should have received a copy of the GNU General Public License
  * along with Cenisys.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include <iostream>
-#include <boost/locale/format.hpp>
+#include "server/terminal/threadedterminalconsole.h"
 #include "server/server.h"
 #include "server/terminal/terminalcolor.h"
-#include "server/terminal/threadedterminalconsole.h"
+#include <boost/locale/format.hpp>
+#include <iostream>
 
 namespace cenisys
 {
@@ -52,9 +52,9 @@ void ThreadedTerminalConsole::detach()
     _writeThread.join();
     if(std::cin)
     {
-        std::cerr << boost::locale::translate("Please press Enter to continue…")
-                         .str()
-                  << std::endl;
+        std::cerr
+            << boost::locale::translate("Please press Enter to continue…").str()
+            << std::endl;
     }
     _readThread.join();
     _console = nullptr;
@@ -67,12 +67,10 @@ void ThreadedTerminalConsole::readWorker()
         std::string buf;
         std::getline(std::cin, buf);
         if(!buf.empty())
-            _console->getServer().processEvent(
-                [ this, buf = std::move(buf) ]
-                {
-                    _console->getServer().dispatchCommand(*_console,
-                                                          std::move(buf));
-                });
+            _console->getServer().processEvent([ this, buf = std::move(buf) ] {
+                _console->getServer().dispatchCommand(*_console,
+                                                      std::move(buf));
+            });
         if(!std::cin)
         {
             _console->getServer().terminate();
@@ -86,10 +84,9 @@ void ThreadedTerminalConsole::writeWorker()
     std::unique_lock<std::mutex> lock(_writeQueueLock);
     while(_running || !_writeQueue.empty())
     {
-        _writeQueueNotifier.wait(lock, [this]() -> bool
-                                 {
-                                     return !_running || !_writeQueue.empty();
-                                 });
+        _writeQueueNotifier.wait(lock, [this]() -> bool {
+            return !_running || !_writeQueue.empty();
+        });
         std::string buf;
         // Ensure everything is written
         while(!_writeQueue.empty())
