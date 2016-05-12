@@ -385,4 +385,8 @@ void Server::stop(boost::asio::coroutine coroutine)
     }
 }
 
+std::shared_ptr<World> Server::getWorld(const std::string &name)
+{
+}
+
 } // namespace cenisys

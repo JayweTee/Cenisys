@@ -19,6 +19,16 @@ add_library(cenisyscore SHARED
     server/terminal/threadedterminalconsole.cpp
     server/terminal/posixasyncterminalconsole.cpp
     server/configmanager.cpp
+    server/chunk.cpp
+    server/world.cpp
+    block/block.cpp
+    block/blockref.cpp
+    block/blockface.cpp
+    util/vector.cpp
+    util/location.cpp
+    material/material.cpp
+    material/air.cpp
+    inventory/itemstack.cpp
     )
 target_link_libraries(cenisyscore PRIVATE
     Threads::Threads

@@ -48,6 +48,7 @@ namespace cenisys
 class ConfigSection;
 class DefaultCommandHandlers;
 class CommandSender;
+class World;
 
 class Server
 {
@@ -145,6 +146,13 @@ public:
     }
 
     std::shared_ptr<ConfigSection> getConfig(const std::string &name);
+
+    //!
+    //! \brief Get a world by name.
+    //! \param name Name of the world.
+    //! \return The world if exists, or nullptr if not.
+    //!
+    std::shared_ptr<World> getWorld(const std::string &name);
 
 private:
     bool lockTask();
