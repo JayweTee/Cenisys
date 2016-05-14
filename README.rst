@@ -24,11 +24,18 @@ Cenisys is written in C++ and has the following feature:
 Requirements
 ------------
 
-Cenisys utilizes bleeding-edge features, and we uses some library in development branch:
+You will need the following libraries for build:
 
-- Boost 1.61 (currently in RC)
+- Boost 1.61
+- yaml-cpp
 
-Cenisys uses C++14. GCC and clang is supported. MSVC isn't recommended since it lacks new standard support.
+To generate documentation, you will need additional tools:
+
+- Sphinx
+- breathe
+- doxygen
+
+The required C++ standard is C++14.
 
 License
 -------
