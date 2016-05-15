@@ -166,7 +166,8 @@ private:
 
     std::mutex _stateLock;
     std::condition_variable _stateWait;
-    int _counter;
+    std::size_t _counter;
+    bool _critical;
     bool _dropEvents;
 
     boost::filesystem::path _dataDir;

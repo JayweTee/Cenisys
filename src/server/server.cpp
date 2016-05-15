@@ -130,7 +130,7 @@ bool Server::lockTask()
     std::size_t ret = 1;
     if(_dropEvents)
         return false;
-    while(_counter < 0)
+    while(_critical && _counter != 0)
     {
         if(ret)
         {
@@ -146,6 +146,7 @@ bool Server::lockTask()
     }
     if(_dropEvents)
         return false;
+    _critical = false;
     _counter++;
     return true;
 }
@@ -183,7 +184,8 @@ bool Server::lockCritical()
     }
     if(type == LockType::Stop && _dropEvents)
         return false;
-    _counter--;
+    _critical = true;
+    _counter++;
     if(type == LockType::Start)
     {
         _dropEvents = false;
@@ -198,7 +200,7 @@ bool Server::lockCritical()
 void Server::unlockCritical()
 {
     std::unique_lock<std::mutex> lock(_stateLock);
-    if(++_counter == 0)
+    if(--_counter == 0)
     {
         lock.unlock();
         _stateWait.notify_all();
@@ -211,7 +213,7 @@ void Server::asyncRunCritical(Handler &&handler, Fn &&... func)
     {
         // Simpler lock since we're holding already
         std::lock_guard<std::mutex> lock(_stateLock);
-        _counter -= sizeof...(func);
+        _counter += sizeof...(func);
     }
     // TODO: C++17 fold expressions
     // HACK: GCC bug
@@ -221,7 +223,7 @@ void Server::asyncRunCritical(Handler &&handler, Fn &&... func)
                 BOOST_SCOPE_EXIT_ALL(&)
                 {
                     std::unique_lock<std::mutex> lock(_stateLock);
-                    if(++_counter == -1)
+                    if(--_counter == 1)
                     {
                         lock.unlock();
                         handler();
@@ -296,7 +298,7 @@ void Server::start(boost::asio::coroutine coroutine)
                                 SERVER_VERSION);
 
         {
-            unsigned int threads =
+            std::size_t threads =
                 _config->getUInt(ConfigSection::Path() / "threads", 0);
             if(threads == 0)
                 threads = std::thread::hardware_concurrency();
@@ -306,7 +308,7 @@ void Server::start(boost::asio::coroutine coroutine)
                                     "Spinning up {1} thread.",
                                     "Spinning up {1} threads.", threads)) %
                                     threads);
-            for(unsigned int i = 1; i < threads; i++)
+            for(std::size_t i = 1; i < threads; i++)
             {
                 _threads.emplace_back([this] { _ioService.run(); });
             }
