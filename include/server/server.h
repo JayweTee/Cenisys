@@ -79,23 +79,18 @@ public:
     //! \return 0 if successfully terminated.
     //!
     int run();
-    template <typename Executor>
-    void terminate(Executor &e)
-    {
-        _ioService.post([this] { stop(); });
-    }
     //!
     //! \brief Terminate the server.
     //!
-    void terminate() { terminate(_ioService); }
+    void terminate();
 
-    template <typename Executor, typename Fn>
-    void processEvent(Executor &executor, Fn &&func)
+    template <typename Fn>
+    void processEvent(Fn &&func)
     {
         std::promise<void> promise;
         std::future<void> future = promise.get_future();
         // HACK: asio cannot dispatch move-only handlers
-        executor.dispatch([ this, func = std::forward<Fn>(func), &promise ] {
+        _ioService.dispatch([ this, func = std::forward<Fn>(func), &promise ] {
             BOOST_SCOPE_EXIT_ALL(&) { promise.set_value(); };
             if(!lockTask())
                 return;
@@ -103,12 +98,6 @@ public:
             func();
         });
         future.get();
-    }
-
-    template <typename Fn>
-    void processEvent(Fn &&func)
-    {
-        processEvent(_ioService, std::forward<Fn>(func));
     }
 
     std::locale getLocale(std::string locale);

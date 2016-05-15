@@ -62,6 +62,11 @@ int Server::run()
     return 0;
 }
 
+void Server::terminate()
+{
+    _ioService.post([this] { stop(); });
+}
+
 std::locale Server::getLocale(std::string locale)
 {
     return _localeGen(locale);
