@@ -11,7 +11,7 @@ find_package(YamlCpp REQUIRED)
 include_directories("${PROJECT_SOURCE_DIR}/include")
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 configure_file(config.h.in config.h)
-add_library(cenisys SHARED
+add_library(cenisyscore SHARED
     command/defaultcommandhandlers.cpp
     config/configsection.cpp
     server/server.cpp
@@ -20,7 +20,7 @@ add_library(cenisys SHARED
     server/terminal/posixasyncterminalconsole.cpp
     server/configmanager.cpp
     )
-target_link_libraries(cenisys PRIVATE
+target_link_libraries(cenisyscore PRIVATE
     Threads::Threads
     Boost::boost
     Boost::filesystem
@@ -28,9 +28,9 @@ target_link_libraries(cenisys PRIVATE
     Boost::system
     YamlCpp
     )
-add_executable(cenisyslauncher main.cpp)
-target_link_libraries(cenisyslauncher
-    cenisys
+add_executable(cenisys main.cpp)
+target_link_libraries(cenisys
+    cenisyscore
     Threads::Threads
     Boost::boost
     Boost::filesystem
@@ -39,9 +39,9 @@ target_link_libraries(cenisyslauncher
     Boost::system
     YamlCpp
     )
-set_property(TARGET cenisyslauncher cenisys PROPERTY CXX_STANDARD 14)
-set_property(TARGET cenisyslauncher cenisys PROPERTY CXX_STANDARD_REQUIRED YES)
-install(TARGETS cenisys cenisyslauncher
+set_property(TARGET cenisys cenisyscore PROPERTY CXX_STANDARD 14)
+set_property(TARGET cenisys cenisyscore PROPERTY CXX_STANDARD_REQUIRED YES)
+install(TARGETS cenisys cenisyscore
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     )

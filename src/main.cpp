@@ -68,7 +68,7 @@ int main(int argc, char *argv[])
         std::locale oldCoutLoc = std::cout.imbue(std::locale());
         std::cout
             << boost::locale::format(boost::locale::translate(
-                   "cenisyslauncher (Cenisys) {1}\n")) %
+                   "Cenisys {1}\n")) %
                    SERVER_VERSION
             << boost::locale::translate(
                    "Copyright (C) 2016 iTX Technologies.\n"

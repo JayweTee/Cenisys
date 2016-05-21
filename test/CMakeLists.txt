@@ -6,20 +6,20 @@ if(BUILD_TEST)
         )
     include_directories("${PROJECT_SOURCE_DIR}/include")
     set(CMAKE_INCLUDE_CURRENT_DIR ON)
-    add_executable(test_runner
+    add_executable(cenisystest
         main.cpp
         )
-    target_link_libraries(test_runner
-        cenisys
+    target_link_libraries(cenisystest
+        cenisyscore
         Boost::boost
         Boost::unit_test_framework
         )
     if(NOT Boost_USE_STATIC_LIBS)
-        target_compile_definitions(test_runner PRIVATE BOOST_TEST_DYN_LINK)
+        target_compile_definitions(cenisystest PRIVATE BOOST_TEST_DYN_LINK)
     endif()
-    set_property(TARGET test_runner PROPERTY CXX_STANDARD 14)
-    set_property(TARGET test_runner PROPERTY CXX_STANDARD_REQUIRED YES)
-    install(TARGETS test_runner
+    set_property(TARGET cenisystest PROPERTY CXX_STANDARD 14)
+    set_property(TARGET cenisystest PROPERTY CXX_STANDARD_REQUIRED YES)
+    install(TARGETS cenisystest
         RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
         )
 endif()
