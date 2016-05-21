@@ -72,7 +72,7 @@ std::locale Server::getLocale(std::string locale)
     return _localeGen(locale);
 }
 
-bool Server::dispatchCommand(CommandSender &sender, const std::string &command)
+void Server::dispatchCommand(CommandSender &sender, const std::string &command)
 {
     std::lock_guard<std::mutex> lock(_commandListLock);
     auto commandName = command.substr(0, command.find(' '));
@@ -80,12 +80,11 @@ bool Server::dispatchCommand(CommandSender &sender, const std::string &command)
     if(it != _commandList.end())
     {
         std::get<Server::CommandHandler>(it->second)(sender, command);
-        return true;
+        return;
     }
     sender.sendMessage(
         boost::locale::format(boost::locale::translate("Unknown command {1}")) %
         commandName);
-    return false;
 }
 
 Server::RegisteredCommandHandler

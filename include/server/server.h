@@ -101,7 +101,7 @@ public:
     }
 
     std::locale getLocale(std::string locale);
-    bool dispatchCommand(CommandSender &sender, const std::string &command);
+    void dispatchCommand(CommandSender &sender, const std::string &command);
 
     RegisteredCommandHandler registerCommand(const std::string &command,
                                              const boost::locale::message &help,
